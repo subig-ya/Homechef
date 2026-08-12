@@ -35,34 +35,10 @@ const submitApplication = async (req, res, next) => {
       });
     }
 
-    if (req.user.role === 'ADMIN') {
-      return res.status(400).json({
-        success: false,
-        message: 'Admins cannot submit a HomeChef application.'
-      });
-    }
-
     if (req.user.role === 'HOMECHEF') {
       return res.status(400).json({
         success: false,
         message: 'You are already a HomeChef.'
-      });
-    }
-
-    let application = await HomeChefApplication.findOne({ user: req.user._id });
-
-    // Prevent duplicate pending applications.
-    if (application && application.status === 'PENDING') {
-      return res.status(400).json({
-        success: false,
-        message: 'You already have a pending HomeChef application. Please wait for the admin to review it.'
-      });
-    }
-
-    if (application && application.status === 'APPROVED') {
-      return res.status(400).json({
-        success: false,
-        message: 'Your application was already approved. You are now a HomeChef.'
       });
     }
 
@@ -89,28 +65,33 @@ const submitApplication = async (req, res, next) => {
       menuItems: parsedMenuItems
     };
 
+    let application = await HomeChefApplication.findOne({ user: req.user._id });
+
     if (application) {
-      // Rejected application — reset it for a fresh submission.
       Object.assign(application, applicationData);
-      application.status = 'PENDING';
-      application.adminNote = '';
-      application.reviewedBy = null;
-      application.reviewedAt = null;
+      application.status = 'APPROVED';
+      application.adminNote = 'Auto-approved: new HomeChef access enabled.';
+      application.reviewedBy = req.user._id;
+      application.reviewedAt = new Date();
       await application.save();
     } else {
       application = await HomeChefApplication.create({
         user: req.user._id,
         ...applicationData,
-        status: 'PENDING'
+        status: 'APPROVED',
+        adminNote: 'Auto-approved: new HomeChef access enabled.',
+        reviewedBy: req.user._id,
+        reviewedAt: new Date()
       });
     }
 
-    req.user.homeChefApplicationStatus = 'PENDING';
+    req.user.role = 'HOMECHEF';
+    req.user.homeChefApplicationStatus = 'APPROVED';
     await req.user.save();
 
     res.status(201).json({
       success: true,
-      message: 'HomeChef application submitted successfully. Your application is now pending review.',
+      message: 'You are now a HomeChef. Your kitchen access is active immediately.',
       data: application
     });
   } catch (error) {

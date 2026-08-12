@@ -20,9 +20,17 @@ const bookingSchema = new mongoose.Schema(
       ref: 'Slot',
       required: true
     },
+    foodService: {
+      type: String,
+      default: ''
+    },
     date: {
       type: String,
       required: true
+    },
+    time: {
+      type: String,
+      default: ''
     },
     slotType: {
       type: String,
@@ -41,6 +49,24 @@ const bookingSchema = new mongoose.Schema(
     specialRequirements: {
       type: String,
       default: ''
+    },
+    bookingLocation: {
+      address: {
+        type: String,
+        default: ''
+      },
+      latitude: {
+        type: Number,
+        default: 0
+      },
+      longitude: {
+        type: Number,
+        default: 0
+      }
+    },
+    calculatedDistance: {
+      type: Number,
+      default: 0
     },
     basePrice: {
       type: Number,
