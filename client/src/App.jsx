@@ -22,7 +22,10 @@ function AppRoutes() {
 
   // The unified dashboard owns its own navigation, so the global
   // Navbar/Footer are hidden there.
-  const hideChrome = location.pathname.startsWith('/dashboard');
+  const hideChrome =
+    location.pathname.startsWith('/dashboard') ||
+    location.pathname === '/login' ||
+    location.pathname === '/register';
 
   return (
     <>
