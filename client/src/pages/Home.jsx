@@ -442,7 +442,7 @@ const Home = () => {
           <div className="relative z-10 max-w-xl mx-auto space-y-4">
             <h3 className="font-cursive text-3xl">Become a HomeChef</h3>
             <p className="text-xs text-pink-100/80 leading-relaxed font-semibold">
-              Turn your cooking passion into a home-based business. Apply once approved to start listing kitchen items, slots, and bookings.
+              Turn your cooking passion into a home-based business. Join instantly and start listing kitchen items, slots, and bookings.
             </p>
             <div className="pt-2">
               <Link

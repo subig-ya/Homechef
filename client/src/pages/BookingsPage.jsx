@@ -17,12 +17,17 @@ const BookingsPage = () => {
     chefId: searchParams.get('chef') || '',
     slotId: searchParams.get('slot') || '',
     date: '',
+    time: '',
     slotType: 'MORNING',
     numberOfGuests: '2',
     cuisinePreference: '',
     specialRequirements: '',
     basePrice: '1500',
-    additionalCharges: '0'
+    additionalCharges: '0',
+    bookingLocationAddress: '',
+    bookingLocationLatitude: '',
+    bookingLocationLongitude: '',
+    bookingLocationMode: 'manual'
   });
 
   const fetchBookings = async () => {
@@ -96,52 +101,88 @@ const BookingsPage = () => {
     setForm({ ...form, slotId, date: slot.date, slotType: slot.slotType });
   };
 
+  const reverseGeocodeLocation = async (latitude, longitude) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+      const data = await response.json();
+      return data?.display_name || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+    } catch (error) {
+      return `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+    }
+  };
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setMessage('Geolocation is not supported in this browser. Please enter your booking location manually.');
+      setMessageType('error');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const placeName = await reverseGeocodeLocation(position.coords.latitude, position.coords.longitude);
+        setForm((prev) => ({
+          ...prev,
+          bookingLocationMode: 'current',
+          bookingLocationLatitude: position.coords.latitude,
+          bookingLocationLongitude: position.coords.longitude,
+          bookingLocationAddress: placeName
+        }));
+        setMessage('Your current location has been captured for this booking.');
+        setMessageType('success');
+      },
+      () => {
+        setMessage('Location permission was denied. You can still enter the booking location manually.');
+        setMessageType('error');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setMessage('');
+
+    if (!form.bookingLocationAddress && (!form.bookingLocationLatitude || !form.bookingLocationLongitude)) {
+      setMessage('Please provide a booking location before confirming.');
+      setMessageType('error');
+      setSubmitting(false);
+      return;
+    }
 
     const token = localStorage.getItem('homechef_token');
     try {
       const response = await API.post('/bookings', {
         sellerId: form.chefId,
         slotId: form.slotId,
+        foodService: form.cuisinePreference || 'Chef service',
         date: form.date,
+        time: form.time,
         slotType: form.slotType,
         numberOfGuests: Number(form.numberOfGuests),
         cuisinePreference: form.cuisinePreference,
         specialRequirements: form.specialRequirements,
+        bookingLocation: {
+          address: form.bookingLocationAddress || 'Current location',
+          latitude: Number(form.bookingLocationLatitude || 0),
+          longitude: Number(form.bookingLocationLongitude || 0)
+        },
         basePrice: Number(form.basePrice),
         additionalCharges: Number(form.additionalCharges)
       }, { headers: { Authorization: `Bearer ${token}` } });
       setMessage(response.data.message || 'Booking created successfully');
       setMessageType('success');
-      setForm({ chefId: form.chefId, slotId: '', date: '', slotType: 'MORNING', numberOfGuests: '2', cuisinePreference: '', specialRequirements: '', basePrice: '1500', additionalCharges: '0' });
+      setForm({ chefId: form.chefId, slotId: '', date: '', time: '', slotType: 'MORNING', numberOfGuests: '2', cuisinePreference: '', specialRequirements: '', basePrice: '1500', additionalCharges: '0', bookingLocationAddress: '', bookingLocationLatitude: '', bookingLocationLongitude: '', bookingLocationMode: 'manual' });
       await fetchBookings();
     } catch (error) {
       setMessage(error.response?.data?.message || 'Unable to create booking');
       setMessageType('error');
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handlePay = async (bookingId, amount) => {
-    const token = localStorage.getItem('homechef_token');
-    setPayingId(bookingId);
-    setMessage('');
-
-    try {
-      const initiated = await API.post('/payments/khalti/initiate', { bookingId, amount }, { headers: { Authorization: `Bearer ${token}` } });
-      const verified = await API.post('/payments/khalti/verify', { paymentId: initiated.data.data._id }, { headers: { Authorization: `Bearer ${token}` } });
-      setMessage(verified.data.message || 'Payment confirmed');
-      setMessageType('success');
-      await fetchBookings();
-    } catch (error) {
-      setMessage(error.response?.data?.message || 'Unable to process payment');
-      setMessageType('error');
-    } finally {
-      setPayingId(null);
     }
   };
 
@@ -244,19 +285,81 @@ const BookingsPage = () => {
               )}
             </select>
 
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-bold text-[#381E39]">3. Booking location</h3>
+                <button
+                  type="button"
+                  onClick={handleUseCurrentLocation}
+                  className="rounded-xl border border-[#4B254B] bg-white px-3 py-1.5 text-[11px] font-bold text-[#4B254B] hover:bg-[#F6EEF4]"
+                >
+                  Use My Current Location
+                </button>
+              </div>
+
+              <input
+                type="text"
+                value={form.bookingLocationAddress}
+                onChange={(e) => setForm({ ...form, bookingLocationAddress: e.target.value, bookingLocationMode: 'manual' })}
+                placeholder="Enter or search booking address"
+                className="mt-3 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4B254B]"
+              />
+
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <input
+                  type="number"
+                  step="any"
+                  value={form.bookingLocationLatitude}
+                  onChange={(e) => setForm({ ...form, bookingLocationLatitude: e.target.value, bookingLocationMode: 'manual' })}
+                  placeholder="Latitude"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4B254B]"
+                />
+                <input
+                  type="number"
+                  step="any"
+                  value={form.bookingLocationLongitude}
+                  onChange={(e) => setForm({ ...form, bookingLocationLongitude: e.target.value, bookingLocationMode: 'manual' })}
+                  placeholder="Longitude"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4B254B]"
+                />
+              </div>
+
+              {form.bookingLocationLatitude && form.bookingLocationLongitude && selectedChef && (
+                <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">
+                  Approx. distance: {(() => {
+                    const chefLat = Number(selectedChef.location?.latitude ?? selectedChef.latitude ?? 0);
+                    const chefLon = Number(selectedChef.location?.longitude ?? selectedChef.longitude ?? 0);
+                    const lat1 = Number(form.bookingLocationLatitude);
+                    const lon1 = Number(form.bookingLocationLongitude);
+                    const dLat = (lat1 - chefLat) * (Math.PI / 180);
+                    const dLon = (lon1 - chefLon) * (Math.PI / 180);
+                    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(chefLat * (Math.PI / 180)) * Math.cos(lat1 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                    const distance = 2 * 6371 * Math.asin(Math.sqrt(a));
+                    return `${Number(distance).toFixed(1)} km away`;
+                  })()}
+                </div>
+              )}
+            </div>
+
             <div className="mt-3 grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1 block text-xs font-bold text-slate-700 uppercase tracking-wider">Date</label>
                 <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4B254B]" required />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-bold text-slate-700 uppercase tracking-wider">Slot type</label>
-                <select value={form.slotType} onChange={(e) => setForm({ ...form, slotType: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4B254B]">
-                  <option value="MORNING">MORNING</option>
-                  <option value="AFTERNOON">AFTERNOON</option>
-                  <option value="EVENING">EVENING</option>
-                </select>
+                <label className="mb-1 block text-xs font-bold text-slate-700 uppercase tracking-wider">Time</label>
+                <input type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4B254B]" required />
               </div>
+            </div>
+
+            <div className="mt-3">
+              <label className="mb-1 block text-xs font-bold text-slate-700 uppercase tracking-wider">Slot type</label>
+              <select value={form.slotType} onChange={(e) => setForm({ ...form, slotType: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4B254B]">
+                <option value="MORNING">MORNING</option>
+                <option value="AFTERNOON">AFTERNOON</option>
+                <option value="EVENING">EVENING</option>
+              </select>
             </div>
           </div>
 
@@ -329,7 +432,7 @@ const BookingsPage = () => {
                           </span>
                         </p>
                         <p className="text-sm text-[#6E5A6E]">
-                          Guests: {booking.numberOfGuests} · Total: Rs. {booking.totalAmount} · Payment: {booking.paymentStatus.toLowerCase()}
+                          Guests: {booking.numberOfGuests} · Total: Rs. {booking.totalAmount}
                         </p>
                       </div>
                     </div>
@@ -337,12 +440,6 @@ const BookingsPage = () => {
                       <span className={`rounded-full border px-3 py-1 text-xs font-bold ${statusColor(booking.status)}`}>
                         {booking.status.toLowerCase()}
                       </span>
-                      {booking.paymentStatus !== 'PAID' && (
-                        <button onClick={() => handlePay(booking._id, booking.totalAmount)} disabled={payingId === booking._id} className="flex items-center gap-1 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition-colors disabled:opacity-60">
-                          <CreditCard className="w-3.5 h-3.5" />
-                          {payingId === booking._id ? 'Processing...' : 'Pay now'}
-                        </button>
-                      )}
                     </div>
                   </div>
                 </div>

@@ -32,7 +32,11 @@ const HomeChefDashboard = () => {
     specialties: '',
     yearsOfExperience: '',
     coverImage: '',
-    profileImage: ''
+    profileImage: '',
+    locationAddress: '',
+    locationLatitude: '',
+    locationLongitude: '',
+    locationMode: 'manual'
   });
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploading, setUploading] = useState('');
@@ -55,22 +59,21 @@ const HomeChefDashboard = () => {
         const currentUser = meRes.data.data;
         localStorage.setItem('homechef_user', JSON.stringify(currentUser));
         setUser(currentUser);
+        const savedLocation = currentUser.location && typeof currentUser.location === 'object'
+          ? currentUser.location
+          : { address: currentUser.location || '', latitude: currentUser.latitude || 0, longitude: currentUser.longitude || 0 };
+
         setProfileForm({
           tagline: currentUser.tagline || '',
           bio: currentUser.bio || '',
           specialties: Array.isArray(currentUser.specialties) ? currentUser.specialties.join(', ') : '',
           yearsOfExperience: currentUser.yearsOfExperience || '',
           coverImage: currentUser.coverImage || '',
-          profileImage: currentUser.profileImage || ''
-        });
-        setPortfolioItems(currentUser.portfolio || []);
-        setProfileForm({
-          tagline: currentUser.tagline || '',
-          bio: currentUser.bio || '',
-          specialties: Array.isArray(currentUser.specialties) ? currentUser.specialties.join(', ') : '',
-          yearsOfExperience: currentUser.yearsOfExperience || '',
-          coverImage: currentUser.coverImage || '',
-          profileImage: currentUser.profileImage || ''
+          profileImage: currentUser.profileImage || '',
+          locationAddress: savedLocation.address || '',
+          locationLatitude: savedLocation.latitude || '',
+          locationLongitude: savedLocation.longitude || '',
+          locationMode: savedLocation.address ? 'manual' : 'manual'
         });
         setPortfolioItems(currentUser.portfolio || []);
 
@@ -210,6 +213,45 @@ const HomeChefDashboard = () => {
     }
   };
 
+  const reverseGeocodeLocation = async (latitude, longitude) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+      const data = await response.json();
+      return data?.display_name || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+    } catch (error) {
+      return `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+    }
+  };
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported in this browser. Please set your location manually.');
+      return;
+    }
+
+    setMessage('Requesting your current location...');
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const placeName = await reverseGeocodeLocation(position.coords.latitude, position.coords.longitude);
+        setProfileForm((prev) => ({
+          ...prev,
+          locationMode: 'current',
+          locationLatitude: position.coords.latitude,
+          locationLongitude: position.coords.longitude,
+          locationAddress: placeName
+        }));
+        setMessage('Current location captured successfully.');
+      },
+      () => {
+        setError('Location access was denied. You can still set your location manually.');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
   const saveProfile = async (e) => {
     e.preventDefault();
     setSavingProfile(true);
@@ -217,18 +259,21 @@ const HomeChefDashboard = () => {
     setError('');
     try {
       const token = localStorage.getItem('homechef_token');
-      await API.put(
-        '/chefs/me/profile',
-        {
-          tagline: profileForm.tagline,
-          bio: profileForm.bio,
-          specialties: profileForm.specialties.split(',').map((s) => s.trim()).filter(Boolean),
-          yearsOfExperience: Number(profileForm.yearsOfExperience) || 0,
-          coverImage: profileForm.coverImage,
-          profileImage: profileForm.profileImage
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const payload = {
+        tagline: profileForm.tagline,
+        bio: profileForm.bio,
+        specialties: profileForm.specialties.split(',').map((s) => s.trim()).filter(Boolean),
+        yearsOfExperience: Number(profileForm.yearsOfExperience) || 0,
+        coverImage: profileForm.coverImage,
+        profileImage: profileForm.profileImage,
+        location: {
+          address: profileForm.locationAddress || '',
+          latitude: Number(profileForm.locationLatitude || 0),
+          longitude: Number(profileForm.locationLongitude || 0)
+        }
+      };
+
+      await API.put('/chefs/me/profile', payload, { headers: { Authorization: `Bearer ${token}` } });
       const meRes = await API.get('/auth/me', { headers: { Authorization: `Bearer ${token}` } });
       const updated = meRes.data.data;
       localStorage.setItem('homechef_user', JSON.stringify(updated));
@@ -451,6 +496,48 @@ const HomeChefDashboard = () => {
                 className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4B254B]"
                 placeholder="Italian, Fresh pasta, Dinner parties"
               />
+            </div>
+
+            <div className="md:col-span-2 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">Location</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleUseCurrentLocation}
+                    className="rounded-xl border border-[#4B254B] bg-white px-3 py-1.5 text-[11px] font-bold text-[#4B254B] hover:bg-[#F6EEF4]"
+                  >
+                    Use My Current Location
+                  </button>
+                </div>
+              </div>
+
+              <input
+                type="text"
+                value={profileForm.locationAddress}
+                onChange={(e) => setProfileForm({ ...profileForm, locationAddress: e.target.value, locationMode: 'manual' })}
+                className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4B254B]"
+                placeholder="Search or enter your kitchen address"
+              />
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  type="number"
+                  step="any"
+                  value={profileForm.locationLatitude}
+                  onChange={(e) => setProfileForm({ ...profileForm, locationLatitude: e.target.value, locationMode: 'manual' })}
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4B254B]"
+                  placeholder="Latitude"
+                />
+                <input
+                  type="number"
+                  step="any"
+                  value={profileForm.locationLongitude}
+                  onChange={(e) => setProfileForm({ ...profileForm, locationLongitude: e.target.value, locationMode: 'manual' })}
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4B254B]"
+                  placeholder="Longitude"
+                />
+              </div>
             </div>
 
             <div className="md:col-span-2">

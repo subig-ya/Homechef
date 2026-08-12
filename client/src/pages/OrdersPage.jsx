@@ -5,7 +5,6 @@ const OrdersPage = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [payingId, setPayingId] = useState(null);
   const [message, setMessage] = useState('');
   const [form, setForm] = useState({ chefId: '', items: [{ name: '', quantity: '1', price: '0' }], totalAmount: '0' });
 
@@ -63,23 +62,6 @@ const OrdersPage = () => {
     }
   };
 
-  const handlePay = async (orderId, amount) => {
-    const token = localStorage.getItem('homechef_token');
-    setPayingId(orderId);
-    setMessage('');
-
-    try {
-      const initiated = await API.post('/payments/khalti/initiate', { orderId, amount }, { headers: { Authorization: `Bearer ${token}` } });
-      const verified = await API.post('/payments/khalti/verify', { paymentId: initiated.data.data._id }, { headers: { Authorization: `Bearer ${token}` } });
-      setMessage(verified.data.message || 'Payment confirmed');
-      await fetchOrders();
-    } catch (error) {
-      setMessage(error.response?.data?.message || 'Unable to process payment');
-    } finally {
-      setPayingId(null);
-    }
-  };
-
   return (
     <div className="min-h-[calc(100vh-8rem)] bg-slate-50 px-4 py-12">
       <div className="mx-auto max-w-5xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
@@ -109,7 +91,7 @@ const OrdersPage = () => {
           </div>
         </form>
 
-        {loading ? <p className="mt-6 text-slate-600">Loading orders...</p> : orders.length === 0 ? <p className="mt-6 text-slate-600">No orders yet.</p> : <div className="mt-6 space-y-3">{orders.map((order) => <div key={order._id} className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold text-slate-900">Status: {order.status}</p><p className="text-sm text-slate-600">Items: {order.items?.length || 0} • Total: Rs. {order.totalAmount}</p></div>{order.paymentStatus !== 'PAID' && <button onClick={() => handlePay(order._id, order.totalAmount)} disabled={payingId === order._id} className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">{payingId === order._id ? 'Processing...' : 'Pay now'}</button>}</div></div>)}</div>}
+        {loading ? <p className="mt-6 text-slate-600">Loading orders...</p> : orders.length === 0 ? <p className="mt-6 text-slate-600">No orders yet.</p> : <div className="mt-6 space-y-3">{orders.map((order) => <div key={order._id} className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold text-slate-900">Status: {order.status}</p><p className="text-sm text-slate-600">Items: {order.items?.length || 0} • Total: Rs. {order.totalAmount}</p></div></div></div>)}</div>}
       </div>
     </div>
   );

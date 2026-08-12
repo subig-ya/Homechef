@@ -37,7 +37,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF6F8] flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen bg-[#FDE7EF] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-200/90 bg-white shadow-xs grid md:grid-cols-2">
         <div className="relative hidden md:block bg-[#FAF4F7]">
           <img
