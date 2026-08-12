@@ -27,9 +27,19 @@ const serializeUser = (user) => ({
   role: user.role,
   homeChefApplicationStatus: user.homeChefApplicationStatus || 'NONE',
   phone: user.phone,
-  location: user.location,
-  latitude: user.latitude,
-  longitude: user.longitude,
+  location: user.location && typeof user.location === 'object'
+    ? {
+        address: user.location.address || '',
+        latitude: Number(user.location.latitude ?? user.latitude ?? 0),
+        longitude: Number(user.location.longitude ?? user.longitude ?? 0)
+      }
+    : {
+        address: user.location || '',
+        latitude: Number(user.latitude ?? 0),
+        longitude: Number(user.longitude ?? 0)
+      },
+  latitude: Number(user.latitude ?? user.location?.latitude ?? 0),
+  longitude: Number(user.longitude ?? user.location?.longitude ?? 0),
   profileImage: user.profileImage || '',
   tagline: user.tagline || '',
   bio: user.bio || '',
@@ -41,7 +51,16 @@ const serializeUser = (user) => ({
 
 const registerUser = async (req, res, next) => {
   try {
-    const { name, email, password, phone, location } = req.body;
+    const {
+      name,
+      email,
+      password,
+      phone,
+      location,
+      role,
+      specialties,
+      yearsOfExperience
+    } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -58,20 +77,38 @@ const registerUser = async (req, res, next) => {
       });
     }
 
+    const normalizedRole = role === 'HOMECHEF' ? 'HOMECHEF' : 'USER';
+    const parsedSpecialties = Array.isArray(specialties)
+      ? specialties.map((s) => String(s).trim()).filter(Boolean)
+      : typeof specialties === 'string'
+        ? specialties.split(',').map((s) => s.trim()).filter(Boolean)
+        : [];
+    const parsedYearsOfExperience = Math.max(0, Number(yearsOfExperience) || 0);
+    const parsedLocationAddress = typeof location === 'string'
+      ? location
+      : location?.address || '';
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Location system: geocode the address ONCE and store the coordinates
     // so every search reuses them instead of re-geocoding repeatedly.
-    const { latitude, longitude } = await geocodeAddress(location);
+    const { latitude, longitude } = await geocodeAddress(parsedLocationAddress);
 
     const user = await User.create({
       name,
       email,
       password: hashedPassword,
       phone: phone || '',
-      location: location || '',
-      latitude,
-      longitude
+      location: {
+        address: parsedLocationAddress,
+        latitude: Number(latitude ?? 0),
+        longitude: Number(longitude ?? 0)
+      },
+      latitude: Number(latitude ?? 0),
+      longitude: Number(longitude ?? 0),
+      role: normalizedRole,
+      specialties: parsedSpecialties,
+      yearsOfExperience: parsedYearsOfExperience
     });
 
     res.status(201).json({
@@ -146,10 +183,26 @@ const updateProfile = async (req, res, next) => {
     if (profileImage !== undefined) req.user.profileImage = profileImage;
 
     if (location !== undefined) {
-      const { latitude, longitude } = await geocodeAddress(location);
-      req.user.location = location;
-      req.user.latitude = latitude;
-      req.user.longitude = longitude;
+      const nextLocation = typeof location === 'string'
+        ? { address: location, latitude: req.user.latitude || 0, longitude: req.user.longitude || 0 }
+        : {
+            address: location?.address || '',
+            latitude: Number(location?.latitude ?? req.user.latitude ?? 0),
+            longitude: Number(location?.longitude ?? req.user.longitude ?? 0)
+          };
+
+      if (!nextLocation.address) {
+        nextLocation.latitude = Number(location?.latitude ?? req.user.latitude ?? 0);
+        nextLocation.longitude = Number(location?.longitude ?? req.user.longitude ?? 0);
+      } else if (nextLocation.latitude === 0 && nextLocation.longitude === 0) {
+        const { latitude, longitude } = await geocodeAddress(nextLocation.address);
+        nextLocation.latitude = Number(latitude || 0);
+        nextLocation.longitude = Number(longitude || 0);
+      }
+
+      req.user.location = nextLocation;
+      req.user.latitude = Number(nextLocation.latitude || 0);
+      req.user.longitude = Number(nextLocation.longitude || 0);
     }
 
     await req.user.save();

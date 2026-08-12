@@ -141,7 +141,7 @@ const getChefById = async (req, res, next) => {
  */
 const updateMyProfile = async (req, res, next) => {
   try {
-    const { tagline, bio, specialties, yearsOfExperience, coverImage, profileImage } = req.body;
+    const { tagline, bio, specialties, yearsOfExperience, coverImage, profileImage, location } = req.body;
 
     if (tagline !== undefined) req.user.tagline = String(tagline);
     if (bio !== undefined) req.user.bio = String(bio);
@@ -154,6 +154,19 @@ const updateMyProfile = async (req, res, next) => {
         : typeof specialties === 'string'
           ? specialties.split(',').map((s) => s.trim()).filter(Boolean)
           : [];
+    }
+    if (location !== undefined) {
+      const nextLocation = typeof location === 'string'
+        ? { address: location, latitude: req.user.location?.latitude ?? req.user.latitude ?? 0, longitude: req.user.location?.longitude ?? req.user.longitude ?? 0 }
+        : {
+            address: location?.address || '',
+            latitude: Number(location?.latitude ?? req.user.location?.latitude ?? req.user.latitude ?? 0),
+            longitude: Number(location?.longitude ?? req.user.location?.longitude ?? req.user.longitude ?? 0)
+          };
+
+      req.user.location = nextLocation;
+      req.user.latitude = Number(nextLocation.latitude || 0);
+      req.user.longitude = Number(nextLocation.longitude || 0);
     }
 
     await req.user.save();

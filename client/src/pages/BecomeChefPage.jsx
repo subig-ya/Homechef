@@ -212,46 +212,14 @@ const BecomeChefPage = () => {
             <div>
               <h2 className="text-2xl font-extrabold text-[#3A233C]">Become a HomeChef</h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Keep using your account as a customer while your application is reviewed.
+                Anyone can join as a HomeChef right away. No admin approval needed.
               </p>
             </div>
           </div>
 
-          {status && statusInfo && (
-            <div className={`mt-6 flex items-center gap-3 rounded-2xl border p-4 ${statusInfo.className}`}>
-              <statusInfo.icon className="w-5 h-5" />
-              <div>
-                <p className="text-sm font-bold">Application Status: {statusInfo.label}</p>
-                <p className="text-xs mt-0.5 opacity-80">
-                  {status === 'PENDING' && 'Your application is under review. Your account still works as a normal customer.'}
-                  {status === 'APPROVED' && 'Congratulations! Your account now has HomeChef privileges.'}
-                  {status === 'REJECTED' && 'Your application was not approved. You can submit a new application below.'}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {status === 'PENDING' && (
-            <div className="mt-6">
-              <Link
-                to="/food"
-                className="inline-block rounded-xl bg-slate-100 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-colors"
-              >
-                Continue browsing as a customer
-              </Link>
-            </div>
-          )}
-
-          {status === 'APPROVED' && (
-            <div className="mt-6">
-              <Link
-                to="/dashboard"
-                className="inline-block rounded-xl bg-[#4B254B] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#391B39] transition-colors"
-              >
-                Open HomeChef Dashboard
-              </Link>
-            </div>
-          )}
+          <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
+            Your kitchen account is activated as soon as you submit this form.
+          </div>
         </div>
 
         {canApply && (
@@ -298,7 +266,7 @@ const BecomeChefPage = () => {
                     value={form.phone}
                     onChange={handleChange}
                     className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4B254B]"
-                    placeholder="555-0199"
+                    placeholder="+977 98XXXXXXXX"
                     required
                   />
                 </div>

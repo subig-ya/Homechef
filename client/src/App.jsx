@@ -5,6 +5,8 @@ import Footer from './components/Footer';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ChefLogin from './pages/ChefLogin';
+import ChefRegister from './pages/ChefRegister';
 import ChefProfilePage from './pages/ChefProfilePage';
 import BecomeChefPage from './pages/BecomeChefPage';
 import ChefsDirectoryPage from './pages/ChefsDirectoryPage';
@@ -35,6 +37,8 @@ function AppRoutes() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/chef/login" element={<ChefLogin />} />
+        <Route path="/chef/register" element={<ChefRegister />} />
         <Route path="/chefs" element={<ChefsDirectoryPage />} />
         <Route path="/chefs/:id" element={<ChefPublicProfilePage />} />
         <Route path="/chef/profile" element={<ChefProfilePage />} />

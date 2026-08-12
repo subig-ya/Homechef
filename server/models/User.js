@@ -61,8 +61,18 @@ const userSchema = new mongoose.Schema(
       }
     ],
     location: {
-      type: String,
-      default: ''
+      address: {
+        type: String,
+        default: ''
+      },
+      latitude: {
+        type: Number,
+        default: 0
+      },
+      longitude: {
+        type: Number,
+        default: 0
+      }
     },
     latitude: {
       type: Number,

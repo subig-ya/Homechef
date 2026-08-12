@@ -27,7 +27,8 @@ import {
   ChevronRight,
   ShieldCheck,
   LayoutDashboard,
-  Home as HomeIcon
+  Home as HomeIcon,
+  Bell
 } from 'lucide-react';
 
 const ORDER_STATUS = {
@@ -78,6 +79,8 @@ const DashboardPage = () => {
   const [chefs, setChefs] = useState([]);
   const [myOrders, setMyOrders] = useState([]);
   const [myBookings, setMyBookings] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   // Common chef data
   const [myListings, setMyListings] = useState([]);
@@ -172,6 +175,9 @@ const DashboardPage = () => {
       if (sellerRes.status === 'fulfilled') setChefs(sellerRes.value.data.data || []);
       if (orderRes.status === 'fulfilled') setMyOrders(orderRes.value.data.data || []);
       if (bookingRes.status === 'fulfilled') setMyBookings(bookingRes.value.data.data || []);
+
+      const notificationsRes = await API.get('/notifications', { headers });
+      setNotifications(notificationsRes.data.data || []);
     } catch (err) {
       setError(err.response?.data?.message || 'Unable to load dashboard data');
     } finally {
@@ -223,58 +229,26 @@ const DashboardPage = () => {
     navigate('/');
   };
 
+  const handleMarkNotificationRead = async (notificationId) => {
+    const token = localStorage.getItem('homechef_token');
+    const headers = { Authorization: `Bearer ${token}` };
+
+    try {
+      await API.put(`/notifications/${notificationId}/read`, {}, { headers });
+      setNotifications((prev) => prev.map((notification) =>
+        notification._id === notificationId ? { ...notification, isRead: true } : notification
+      ));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to update notification');
+    }
+  };
+
   const handleModeSwitch = (newMode) => {
     setMode(newMode);
     setActiveTab('overview');
     setSidebarOpen(false);
     setMessage('');
     setError('');
-  };
-
-  // Pay Order handler via Khalti
-  const handleOrderPay = async (orderId, amount) => {
-    const token = localStorage.getItem('homechef_token');
-    const headers = { Authorization: `Bearer ${token}` };
-    setPayingId(orderId);
-    setMessage('');
-    setError('');
-
-    try {
-      const initiated = await API.post('/payments/khalti/initiate', { orderId, amount }, { headers });
-      const verified = await API.post('/payments/khalti/verify', { paymentId: initiated.data.data._id }, { headers });
-      setMessage(verified.data.message || 'Order paid successfully');
-      
-      // reload customer orders
-      const orderRes = await API.get('/orders/my', { headers });
-      setMyOrders(orderRes.data.data || []);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Khalti payment processing failed');
-    } finally {
-      setPayingId(null);
-    }
-  };
-
-  // Pay Booking handler
-  const handleBookingPay = async (bookingId, amount) => {
-    const token = localStorage.getItem('homechef_token');
-    const headers = { Authorization: `Bearer ${token}` };
-    setPayingId(bookingId);
-    setMessage('');
-    setError('');
-
-    try {
-      const initiated = await API.post('/payments/khalti/initiate', { orderId: bookingId, amount }, { headers });
-      const verified = await API.post('/payments/khalti/verify', { paymentId: initiated.data.data._id }, { headers });
-      setMessage(verified.data.message || 'Booking paid successfully');
-      
-      // reload customer bookings
-      const bookingRes = await API.get('/bookings/my', { headers });
-      setMyBookings(bookingRes.data.data || []);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Khalti booking payment failed');
-    } finally {
-      setPayingId(null);
-    }
   };
 
   // Chef order status actions
@@ -467,7 +441,7 @@ const DashboardPage = () => {
       };
       const response = await API.post('/homechef/apply', payload, { headers });
       setApplication(response.data.data);
-      setMessage('Your HomeChef application has been submitted successfully! It is pending review.');
+      setMessage('Your HomeChef account is now active. You can start using kitchen features immediately.');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to submit application');
     } finally {
@@ -644,6 +618,65 @@ const DashboardPage = () => {
             </h2>
           </div>
           <div className="flex items-center gap-4 text-xs font-bold text-chocolate/80">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setNotificationsOpen((open) => !open)}
+                className="relative p-2 rounded-full border border-pink-100 bg-pink-50 text-chocolate hover:bg-pink-100 transition-colors"
+                aria-label="View notifications"
+              >
+                <Bell className="w-4 h-4" />
+                {notifications.some((n) => !n.isRead) && (
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                    {notifications.filter((n) => !n.isRead).length}
+                  </span>
+                )}
+              </button>
+
+              {notificationsOpen && (
+                <div className="absolute right-0 top-12 z-50 w-80 rounded-2xl border border-pink-100 bg-white p-3 shadow-xl">
+                  <div className="mb-2 flex items-center justify-between">
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-chocolate/70">Notifications</h4>
+                    <button
+                      type="button"
+                      onClick={() => setNotificationsOpen(false)}
+                      className="text-[10px] font-bold text-chocolate/50 hover:text-chocolate"
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  {notifications.length === 0 ? (
+                    <p className="text-[11px] text-chocolate/50 py-3">No notifications yet.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-72 overflow-y-auto">
+                      {notifications.map((notification) => (
+                        <button
+                          key={notification._id}
+                          type="button"
+                          onClick={() => {
+                            handleMarkNotificationRead(notification._id);
+                            setNotificationsOpen(false);
+                          }}
+                          className={`w-full rounded-xl border p-3 text-left transition-colors ${
+                            notification.isRead
+                              ? 'border-pink-100 bg-pink-50/40 text-chocolate/70'
+                              : 'border-primary/20 bg-primary/5 text-chocolate'
+                          }`}
+                        >
+                          <p className="text-[11px] font-bold">{notification.title}</p>
+                          <p className="mt-1 text-[10px] leading-relaxed opacity-80">{notification.message}</p>
+                          {!notification.isRead && (
+                            <span className="mt-2 inline-block rounded-full bg-primary px-2 py-0.5 text-[9px] font-bold text-white">Unread</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {mode === 'chef' ? (
               <span className="flex items-center gap-1 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full border border-emerald-200">
                 <CheckCircle2 className="w-3.5 h-3.5" /> Kitchen Active
@@ -831,7 +864,7 @@ const DashboardPage = () => {
                 <div className="bg-white border border-pink-100 rounded-3xl p-6 shadow-xs space-y-6 animate-fade-up">
                   <div>
                     <h3 className="font-display font-extrabold text-base">My order history</h3>
-                    <p className="text-xs text-chocolate/60">Pay and monitor statuses of orders</p>
+                    <p className="text-xs text-chocolate/60">Monitor your food orders</p>
                   </div>
 
                   {myOrders.length === 0 ? (
@@ -853,13 +886,11 @@ const DashboardPage = () => {
                             <th className="pb-3 px-2">Total Amount</th>
                             <th className="pb-3 px-2">Date</th>
                             <th className="pb-3 px-2">Status</th>
-                            <th className="pb-3 px-2 text-right">Payment</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-pink-50">
                           {myOrders.map((order) => {
                             const status = ORDER_STATUS[order.status] || { label: order.status, cls: 'text-slate-600 bg-slate-50' };
-                            const canPay = order.status !== 'REJECTED' && order.status !== 'CANCELLED' && order.paymentStatus !== 'PAID';
                             return (
                               <tr key={order._id} className="hover:bg-pink-50/20 transition-colors">
                                 <td className="py-3.5 px-2 font-mono text-[10px] text-chocolate/60">#{order._id?.slice(-6)}</td>
@@ -869,22 +900,6 @@ const DashboardPage = () => {
                                 <td className="py-3.5 px-2 text-chocolate/60">{formatDate(order.createdAt)}</td>
                                 <td className="py-3.5 px-2">
                                   <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${status.cls}`}>{status.label}</span>
-                                </td>
-                                <td className="py-3.5 px-2 text-right">
-                                  {order.paymentStatus === 'PAID' ? (
-                                    <span className="text-emerald-600 font-bold text-[10px]">Paid</span>
-                                  ) : canPay ? (
-                                    <button
-                                      onClick={() => handleOrderPay(order._id, order.totalAmount)}
-                                      disabled={payingId === order._id}
-                                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-[10px] font-bold transition-all disabled:opacity-60 flex items-center gap-1 ml-auto"
-                                    >
-                                      <CreditCard className="w-3 h-3" />
-                                      {payingId === order._id ? 'Paying...' : 'Pay'}
-                                    </button>
-                                  ) : (
-                                    <span className="text-chocolate/40">-</span>
-                                  )}
                                 </td>
                               </tr>
                             );
@@ -923,13 +938,11 @@ const DashboardPage = () => {
                             <th className="pb-3 px-2">Guests</th>
                             <th className="pb-3 px-2">Price</th>
                             <th className="pb-3 px-2">Status</th>
-                            <th className="pb-3 px-2 text-right">Payment</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-pink-50">
                           {myBookings.map((booking) => {
                             const status = BOOKING_STATUS[booking.status] || { label: booking.status, cls: 'text-slate-600 bg-slate-50' };
-                            const canPay = booking.status === 'ACCEPTED' && booking.paymentStatus !== 'PAID';
                             return (
                               <tr key={booking._id} className="hover:bg-pink-50/20 transition-colors">
                                 <td className="py-3.5 px-2 font-bold">{booking.date}</td>
@@ -940,22 +953,7 @@ const DashboardPage = () => {
                                 <td className="py-3.5 px-2">
                                   <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${status.cls}`}>{status.label}</span>
                                 </td>
-                                <td className="py-3.5 px-2 text-right">
-                                  {booking.paymentStatus === 'PAID' ? (
-                                    <span className="text-emerald-600 font-bold text-[10px]">Paid</span>
-                                  ) : canPay ? (
-                                    <button
-                                      onClick={() => handleBookingPay(booking._id, booking.totalAmount)}
-                                      disabled={payingId === booking._id}
-                                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-[10px] font-bold transition-all disabled:opacity-60 flex items-center gap-1 ml-auto"
-                                    >
-                                      <CreditCard className="w-3 h-3" />
-                                      {payingId === booking._id ? 'Paying...' : 'Pay'}
-                                    </button>
-                                  ) : (
-                                    <span className="text-chocolate/40">-</span>
-                                  )}
-                                </td>
+                                <td className="py-3.5 px-2 text-right text-chocolate/40">-</td>
                               </tr>
                             );
                           })}
@@ -1014,7 +1012,7 @@ const DashboardPage = () => {
                               value={applyForm.phone}
                               onChange={(e) => setApplyForm({ ...applyForm, phone: e.target.value })}
                               className="w-full rounded-xl border border-pink-100 bg-cream/30 px-3.5 py-2.5 text-xs outline-none focus:ring-2 focus:ring-primary text-chocolate font-medium"
-                              placeholder="555-0100"
+                              placeholder="+977 98XXXXXXXX"
                               required
                             />
                           </div>
