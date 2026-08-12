@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment variables
+.env
+**/.env
+.env.local
+**/.env.local
+
+# Build files
+dist/
+**/dist/
+build/
+**/build/
+
+# Logs and temporary files
+*.log
+*_out.txt
+*_err.txt
+logs.txt
+logs_err.txt

@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Quicksand', system-ui, -apple-system, sans-serif;
+  --font-display: 'Fredoka', system-ui, -apple-system, sans-serif;
+  --font-cursive: 'Pacifico', cursive;
+
+  --color-primary: #E25C80;
+  --color-primary-hover: #C54567;
+  --color-chocolate: #563124;
+  --color-cream: #FDFBF7;
+  --color-outer-pink: #FFAEBF;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    background-color: #FFF5F7;
+    color: var(--color-chocolate);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+  }
+}
+
+/* Custom animations & utilities */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes float-slow {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(10px);
+  }
+}
+
+@keyframes blob {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(16px, -20px) scale(1.05);
+  }
+  66% {
+    transform: translate(-12px, 10px) scale(0.96);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.5s ease both;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: float-slow 6s ease-in-out infinite;
+}
+
+.animate-blob {
+  animation: blob 10s ease-in-out infinite;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
