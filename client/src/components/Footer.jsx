@@ -1,73 +1,172 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import {
+  ChefHat,
+  Instagram,
+  Facebook,
+  Mail,
+} from 'lucide-react';
 
 const Footer = () => {
+  const isLoggedIn = !!localStorage.getItem('homechef_token');
+
   return (
-    <footer className="bg-[#FAF5F7] border-t border-pink-100/60 pt-14 pb-12 text-slate-600">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          
-          {/* Brand Column */}
-          <div className="space-y-3 md:col-span-1">
-            <Link to="/" className="inline-block">
-              <span className="font-extrabold text-2xl tracking-tight text-[#3A233C]">
-                Home<span className="text-[#4A254B]">Chef</span>
-              </span>
-            </Link>
-            <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
-              © {new Date().getFullYear()} HomeChef. Artisanal meals for your community.
-            </p>
-          </div>
+    <footer className="border-t border-[#F1DCE3] bg-[#FFF1F5] text-chocolate">
 
-          {/* Nav Column 1 */}
-          <div className="space-y-2 text-sm">
-            <div>
-              <Link to="/about" className="hover:text-[#4A254B] transition-colors text-slate-600">
-                About
-              </Link>
-            </div>
-            <div>
-              <Link to="/food" className="font-semibold text-[#4A254B] hover:underline">
-                Explore Food
-              </Link>
-            </div>
-          </div>
+      <div className="mx-auto grid max-w-7xl gap-12 px-5 py-16 sm:px-8 md:grid-cols-2 lg:grid-cols-4 lg:px-10">
 
-          {/* Nav Column 2 */}
-          <div className="space-y-2 text-sm">
-            <div>
-              <Link to="/chefs" className="hover:text-[#4A254B] transition-colors text-slate-600">
-                HomeChefs
-              </Link>
-            </div>
-            <div>
-              <Link to="/help" className="hover:text-[#4A254B] transition-colors text-slate-600">
-                Help
-              </Link>
-            </div>
-          </div>
+        <div className="lg:col-span-2">
 
-          {/* Nav Column 3 */}
-          <div className="space-y-2 text-sm">
-            <div>
-              <Link to="/contact" className="hover:text-[#4A254B] transition-colors text-slate-600">
-                Contact
-              </Link>
+          <Link
+            to="/"
+            className="group flex w-fit items-center gap-2.5"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F4D3DE] text-[#C45B7C] transition-colors group-hover:bg-[#D96F91] group-hover:text-white">
+              <ChefHat size={21} strokeWidth={1.8} />
             </div>
-            <div>
-              <Link to="/privacy" className="hover:text-[#4A254B] transition-colors text-slate-600">
-                Privacy
-              </Link>
-            </div>
-            <div>
-              <Link to="/terms" className="hover:text-[#4A254B] transition-colors text-slate-600">
-                Terms
-              </Link>
-            </div>
+
+            <span className="font-cursive text-[2rem] leading-none text-chocolate transition-colors group-hover:text-[#D96F91]">
+              HomeChef
+            </span>
+          </Link>
+
+          <p className="mt-5 max-w-md text-sm leading-7 text-[#876B63]">
+            Bringing passionate local chefs and food lovers together
+            to create memorable dining experiences, one meal at a time.
+          </p>
+
+          <div className="mt-6 flex items-center gap-3">
+
+            <a
+              href="#"
+              aria-label="Instagram"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#C45B7C] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#D96F91] hover:text-white"
+            >
+              <Instagram size={16} />
+            </a>
+
+            <a
+              href="#"
+              aria-label="Facebook"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#C45B7C] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#D96F91] hover:text-white"
+            >
+              <Facebook size={16} />
+            </a>
+
+            <a
+              href="#"
+              aria-label="Email"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#C45B7C] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#D96F91] hover:text-white"
+            >
+              <Mail size={16} />
+            </a>
+
           </div>
 
         </div>
+
+        <div>
+
+          <h3 className="text-sm font-semibold text-chocolate">
+            Explore
+          </h3>
+
+          <div className="mt-5 flex flex-col gap-3">
+
+            <a
+              href="#home"
+              className="w-fit text-sm text-[#876B63] transition-colors hover:text-[#D96F91]"
+            >
+              Home
+            </a>
+
+            <a
+              href="#chefs"
+              className="w-fit text-sm text-[#876B63] transition-colors hover:text-[#D96F91]"
+            >
+              Find Chefs
+            </a>
+
+            <a
+              href="#about"
+              className="w-fit text-sm text-[#876B63] transition-colors hover:text-[#D96F91]"
+            >
+              About Us
+            </a>
+
+            <a
+              href="#why-us"
+              className="w-fit text-sm text-[#876B63] transition-colors hover:text-[#D96F91]"
+            >
+              Why Choose Us
+            </a>
+
+          </div>
+
+        </div>
+
+        <div>
+
+          <h3 className="text-sm font-semibold text-chocolate">
+            Account
+          </h3>
+
+          <div className="mt-5 flex flex-col gap-3">
+
+            {!isLoggedIn && (
+              <>
+                <Link
+                  to="/login"
+                  className="w-fit text-sm text-[#876B63] transition-colors hover:text-[#D96F91]"
+                >
+                  Login
+                </Link>
+
+                <Link
+                  to="/register"
+                  className="w-fit text-sm text-[#876B63] transition-colors hover:text-[#D96F91]"
+                >
+                  Create Account
+                </Link>
+              </>
+            )}
+
+            <Link
+              to="/food"
+              className="w-fit text-sm text-[#876B63] transition-colors hover:text-[#D96F91]"
+            >
+              Browse Meals
+            </Link>
+
+            <Link
+              to="/become-chef"
+              className="w-fit text-sm text-[#876B63] transition-colors hover:text-[#D96F91]"
+            >
+              Become a Chef
+            </Link>
+
+          </div>
+
+        </div>
+
       </div>
+
+      <div className="border-t border-[#EED9E0]">
+
+        <div className="mx-auto flex max-w-7xl flex-col gap-2 px-5 py-5 text-xs text-[#A58A82] sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
+
+          <p>
+            © {new Date().getFullYear()} HomeChef. All rights reserved.
+          </p>
+
+          <p>
+            Made for people who love good food.
+          </p>
+
+        </div>
+
+      </div>
+
     </footer>
   );
 };

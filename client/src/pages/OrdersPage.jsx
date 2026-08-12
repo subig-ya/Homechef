@@ -83,7 +83,7 @@ const OrdersPage = () => {
           ))}
           <div className="flex flex-wrap gap-3">
             <button type="button" onClick={addItem} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Add item</button>
-            <div className="flex-1 min-w-[220px]">
+            <div className="flex-1 min-w-55">
               <label className="mb-1 block text-sm font-semibold text-slate-700">Total amount</label>
               <input type="number" min="0" value={form.totalAmount} onChange={(e) => setForm({ ...form, totalAmount: e.target.value })} className="w-full rounded-xl border border-slate-300 px-3 py-2" required />
             </div>
