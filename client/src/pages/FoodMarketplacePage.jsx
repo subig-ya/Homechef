@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import API from '../api/axios';
 import { Search, SlidersHorizontal, Heart, Star, ChevronLeft, ChevronRight, X, Utensils, Clock, CheckCircle } from 'lucide-react';
 
@@ -18,6 +18,7 @@ import { Search, SlidersHorizontal, Heart, Star, ChevronLeft, ChevronRight, X, U
 
 const FoodMarketplacePage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [dishes, setDishes] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +42,12 @@ const FoodMarketplacePage = () => {
   // Selected Dish Modal State
   const [selectedDish, setSelectedDish] = useState(null);
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [orderError, setOrderError] = useState('');
+  const [ordering, setOrdering] = useState(false);
+  const [orderQty, setOrderQty] = useState('1');
+  const [deliveryType, setDeliveryType] = useState('PICKUP');
+  const [requestedTime, setRequestedTime] = useState('');
+  const [orderRespondsBy, setOrderRespondsBy] = useState('');
 
   // Category counts matching design mockups
   const categoryCounts = {
@@ -123,6 +130,41 @@ const FoodMarketplacePage = () => {
   const totalPages = Math.ceil(dishes.length / itemsPerPage) || 1;
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedDishes = dishes.slice(startIndex, startIndex + itemsPerPage);
+
+  // Sends a structured meal request to the chef's listing owner.
+  const handlePlaceOrder = async () => {
+    setOrderError('');
+    const token = localStorage.getItem('homechef_token');
+    if (!token) {
+      navigate('/login', { state: { from: '/food' } });
+      return;
+    }
+    if (!selectedDish) return;
+    setOrdering(true);
+    try {
+      const quantity = Math.max(1, Number(orderQty) || 1);
+      const response = await API.post(
+        '/orders',
+        {
+          items: [{ dishId: selectedDish._id, quantity }],
+          deliveryType,
+          requestedTime: requestedTime ? new Date(requestedTime).toISOString() : undefined
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const created = response.data.data;
+      setOrderRespondsBy(
+        created?.expiresAt
+          ? new Date(created.expiresAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+          : ''
+      );
+      setOrderSuccess(true);
+    } catch (err) {
+      setOrderError(err.response?.data?.message || 'Unable to place your order. Please try again.');
+    } finally {
+      setOrdering(false);
+    }
+  };
 
   return (
     <div className="bg-[#FAF6F8] min-h-screen py-10 px-4 sm:px-6 lg:px-8">
@@ -392,6 +434,11 @@ const FoodMarketplacePage = () => {
                           onClick={() => {
                             setSelectedDish(dish);
                             setOrderSuccess(false);
+                            setOrderError('');
+                            setOrderQty('1');
+                            setDeliveryType('PICKUP');
+                            setRequestedTime('');
+                            setOrderRespondsBy('');
                           }}
                           className="w-full py-2.5 text-xs font-bold text-slate-700 hover:text-[#4B254B] bg-slate-50 hover:bg-pink-50/50 border border-slate-200/80 rounded-xl transition-all"
                         >
@@ -483,16 +530,79 @@ const FoodMarketplacePage = () => {
               </div>
 
               {orderSuccess ? (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-600" /> Order placed successfully! Check your orders tab.
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                  <span>
+                    Order request sent to the chef!
+                    {orderRespondsBy && (
+                      <>
+                        {' '}The chef has until <b>{orderRespondsBy}</b> to respond. Track it from your orders tab.
+                      </>
+                    )}
+                  </span>
                 </div>
               ) : (
-                <button
-                  onClick={() => setOrderSuccess(true)}
-                  className="w-full py-3 text-sm font-bold text-white bg-[#4B254B] hover:bg-[#391B39] rounded-xl transition-colors shadow-xs"
-                >
-                  Order Now (Rs. {selectedDish.price})
-                </button>
+                <div className="space-y-3 pt-2 border-t border-slate-100">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Quantity</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={orderQty}
+                        onChange={(e) => setOrderQty(e.target.value)}
+                        className="w-full mt-1 px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4B254B]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Get it</label>
+                      <div className="mt-1 grid grid-cols-2 gap-1.5">
+                        {['PICKUP', 'DELIVERY'].map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setDeliveryType(mode)}
+                            className={`px-2 py-1.5 text-xs font-bold rounded-lg border transition-colors ${
+                              deliveryType === mode
+                                ? 'bg-[#4B254B] text-white border-[#4B254B]'
+                                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            {mode === 'PICKUP' ? 'Pickup' : 'Delivery'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Requested time (optional)</label>
+                    <input
+                      type="datetime-local"
+                      value={requestedTime}
+                      min={new Date().toISOString().slice(0, 16)}
+                      onChange={(e) => setRequestedTime(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4B254B]"
+                    />
+                    <p className="mt-1 text-[10px] text-slate-400">
+                      Leave empty for "as soon as possible". The chef must answer within 30 min for today, 60 min otherwise.
+                    </p>
+                  </div>
+
+                  {orderError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-semibold">{orderError}</div>
+                  )}
+
+                  <button
+                    onClick={handlePlaceOrder}
+                    disabled={ordering}
+                    className="w-full py-3 text-sm font-bold text-white bg-[#4B254B] hover:bg-[#391B39] rounded-xl transition-colors shadow-xs disabled:opacity-60"
+                  >
+                    {ordering
+                      ? 'Sending request...'
+                      : `Order Now (Rs. ${(Number(selectedDish.price) * (Number(orderQty) || 1)).toLocaleString()})`}
+                  </button>
+                </div>
               )}
             </div>
           </div>

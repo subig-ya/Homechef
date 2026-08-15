@@ -9,6 +9,7 @@ const Register = () => {
     name: '',
     email: '',
     password: '',
+    confirmPassword: '',
     phone: '',
     location: ''
   });
@@ -23,6 +24,18 @@ const Register = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match.');
+      setLoading(false);
+      return;
+    }
+
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters long.');
+      setLoading(false);
+      return;
+    }
 
     try {
       await API.post('/auth/register', formData);
@@ -138,7 +151,20 @@ const Register = () => {
               value={formData.password}
               onChange={handleChange}
               className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4B254B]"
-              placeholder="Choose a password"
+              placeholder="At least 8 characters"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-bold text-slate-700 uppercase tracking-wider">Confirm Password</label>
+            <input
+              type="password"
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4B254B]"
+              placeholder="Re-enter password"
               required
             />
           </div>

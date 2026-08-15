@@ -6,30 +6,68 @@ const Notification = require('../models/Notification');
 
 const createReview = async (req, res, next) => {
   try {
-    const { dishId, orderId, sellerId, bookingId, rating, comment } = req.body;
+    // TRUST & FRAUD GATE: a review is only meaningful when it comes from a
+    // customer with a genuinely completed transaction with this chef. Anything
+    // earlier (pending, rejected, cancelled, expired) is not evidence of an
+    // experience — rejecting it keeps the Bayesian average game-resistant.
+    const { sellerId, rating, comment, orderId, bookingId, dishId } = req.body;
     if (!sellerId || !rating || !comment) {
       return res.status(400).json({ success: false, message: 'Seller, rating, and comment are required.' });
     }
 
-    // A review must be tied to a real completed order, if one is provided.
+    let verifiedOrder = null;
+    let verifiedBooking = null;
+
     if (orderId) {
-      const order = await Order.findOne({ _id: orderId, customerId: req.user._id, sellerId });
-      if (!order) {
-        return res.status(400).json({ success: false, message: 'Order not found or not purchased from this seller.' });
+      verifiedOrder = await Order.findOne({
+        _id: orderId,
+        customerId: req.user._id,
+        sellerId,
+        status: 'COMPLETED'
+      });
+      if (!verifiedOrder) {
+        return res.status(400).json({
+          success: false,
+          message: 'You can only review an order after it has been completed.'
+        });
       }
     }
 
-    // A chef review may be tied to a booking (a home-cooking service). The
-    // customer must own the booking and it must be accepted or later.
     if (bookingId) {
-      const booking = await Booking.findOne({ _id: bookingId, customerId: req.user._id, sellerId });
-      if (!booking) {
-        return res.status(400).json({ success: false, message: 'Booking not found or not made with this chef.' });
-      }
-      if (!['ACCEPTED', 'CONFIRMED', 'COMPLETED'].includes(booking.status)) {
+      verifiedBooking = await Booking.findOne({
+        _id: bookingId,
+        customerId: req.user._id,
+        sellerId,
+        status: 'COMPLETED'
+      });
+      if (!verifiedBooking) {
         return res.status(400).json({
           success: false,
-          message: 'You can only review a chef after the booking has been accepted or completed.'
+          message: 'You can only review a chef after the booking has been completed.'
+        });
+      }
+    }
+
+    // A dish review must be backed by a completed order that actually included
+    // that dish — nobody can rate food they never received.
+    if (!verifiedOrder && !verifiedBooking) {
+      if (dishId) {
+        verifiedOrder = await Order.findOne({
+          customerId: req.user._id,
+          sellerId,
+          status: 'COMPLETED',
+          'items.dishId': dishId
+        });
+        if (!verifiedOrder) {
+          return res.status(400).json({
+            success: false,
+            message: 'You can only review food you actually ordered and received.'
+          });
+        }
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Reviews must be tied to a completed order or booking.'
         });
       }
     }
@@ -47,8 +85,8 @@ const createReview = async (req, res, next) => {
       customerId: req.user._id,
       sellerId,
       dishId: dishId || null,
-      bookingId: bookingId || null,
-      orderId: orderId || null,
+      bookingId: verifiedBooking ? verifiedBooking._id : (bookingId || null),
+      orderId: verifiedOrder ? verifiedOrder._id : (orderId || null),
       rating,
       comment
     });

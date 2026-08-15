@@ -9,6 +9,10 @@ const Review = require('./Review');
 const Payment = require('./Payment');
 const Notification = require('./Notification');
 const Report = require('./Report');
+const SupportTicket = require('./SupportTicket');
+const Conversation = require('./Conversation');
+const Message = require('./Message');
+const Favorite = require('./Favorite');
 
 module.exports = {
   User,
@@ -21,5 +25,9 @@ module.exports = {
   Review,
   Payment,
   Notification,
-  Report
+  Report,
+  SupportTicket,
+  Conversation,
+  Message,
+  Favorite
 };

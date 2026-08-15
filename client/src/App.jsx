@@ -5,6 +5,8 @@ import Footer from './components/Footer';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import ChefRegister from './pages/ChefRegister';
 import ChefProfilePage from './pages/ChefProfilePage';
 import BecomeChefPage from './pages/BecomeChefPage';
@@ -16,8 +18,8 @@ import AvailabilityPage from './pages/AvailabilityPage';
 import BookingsPage from './pages/BookingsPage';
 import OrdersPage from './pages/OrdersPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
-import DashboardPage from './pages/DashboardPage';
 import ChefDashboardPage from './pages/ChefDashboardPage';
+import CustomerDashboardPage from './pages/customer/CustomerDashboardPage';
 
 function AppRoutes() {
   const location = useLocation();
@@ -28,7 +30,9 @@ function AppRoutes() {
     location.pathname.startsWith('/dashboard') ||
     location.pathname.startsWith('/chef/dashboard') ||
     location.pathname === '/login' ||
-    location.pathname === '/register';
+    location.pathname === '/register' ||
+    location.pathname === '/forgot-password' ||
+    location.pathname.startsWith('/reset-password');
 
   return (
     <>
@@ -38,6 +42,8 @@ function AppRoutes() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
         <Route path="/chef/login" element={<Navigate to="/login" replace />} />
         <Route path="/chef/register" element={<ChefRegister />} />
         <Route path="/chefs" element={<ChefsDirectoryPage />} />
@@ -50,7 +56,7 @@ function AppRoutes() {
         <Route path="/bookings" element={<BookingsPage />} />
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/dashboard" element={<CustomerDashboardPage />} />
         <Route path="/chef/dashboard" element={<ChefDashboardPage />} />
 
         {/* Catch-all route */}

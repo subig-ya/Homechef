@@ -9,6 +9,7 @@
 // resolve to { latitude: 0, longitude: 0 } instead of throwing.
 
 const GEOCODE_URL = 'https://nominatim.openstreetmap.org/search';
+const REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse';
 const REQUEST_TIMEOUT_MS = 4000;
 
 const geocodeAddress = async (address) => {
@@ -53,4 +54,46 @@ const geocodeAddress = async (address) => {
   }
 };
 
-module.exports = { geocodeAddress };
+// Converts GPS coordinates (from a device's location) into a human-readable
+// address using Nominatim reverse geocoding. Best-effort like geocodeAddress.
+const reverseGeocode = async (latitude, longitude) => {
+  const lat = Number(latitude);
+  const lon = Number(longitude);
+
+  if (!lat || !lon) {
+    return { address: '', latitude: lat || 0, longitude: lon || 0 };
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    const url = new URL(REVERSE_URL);
+    url.searchParams.set('lat', String(lat));
+    url.searchParams.set('lon', String(lon));
+    url.searchParams.set('format', 'json');
+
+    const response = await fetch(url.toString(), {
+      signal: controller.signal,
+      headers: { 'Accept': 'application/json', 'User-Agent': 'HomeChef-SE-Project/1.0' }
+    });
+
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      return { address: '', latitude: lat, longitude: lon };
+    }
+
+    const result = await response.json();
+
+    return {
+      address: result.display_name || '',
+      latitude: Number(result.lat) || lat,
+      longitude: Number(result.lon) || lon
+    };
+  } catch (error) {
+    return { address: '', latitude: lat, longitude: lon };
+  }
+};
+
+module.exports = { geocodeAddress, reverseGeocode };

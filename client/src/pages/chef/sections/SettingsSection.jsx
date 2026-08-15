@@ -1,7 +1,20 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import API from '../../../api/axios';
 import useImageUpload from '../useImageUpload';
-import { Loader2, UploadCloud, CheckCircle2, Star, MapPin, Clock, LocateFixed } from 'lucide-react';
+import {
+  Loader2,
+  UploadCloud,
+  CheckCircle2,
+  Star,
+  MapPin,
+  Clock,
+  LocateFixed,
+  ExternalLink,
+  KeyRound,
+  Eye,
+  EyeOff
+} from 'lucide-react';
 
 const getToken = () => ({ Authorization: `Bearer ${localStorage.getItem('homechef_token')}` });
 
@@ -14,6 +27,7 @@ const SettingsSection = ({ user, refresh }) => {
     tagline: '',
     bio: '',
     specialties: '',
+    cuisines: '',
     yearsOfExperience: '',
     location: '',
     profileImage: '',
@@ -27,6 +41,13 @@ const SettingsSection = ({ user, refresh }) => {
   const [locationMsg, setLocationMsg] = useState('');
   const { upload, uploading } = useImageUpload();
 
+  // Password change form state.
+  const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwMsg, setPwMsg] = useState('');
+  const [pwError, setPwError] = useState('');
+  const [showPw, setShowPw] = useState(false);
+
   useEffect(() => {
     if (!user) return;
     setForm({
@@ -34,6 +55,7 @@ const SettingsSection = ({ user, refresh }) => {
       tagline: user.tagline || '',
       bio: user.bio || '',
       specialties: Array.isArray(user.specialties) ? user.specialties.join(', ') : '',
+      cuisines: Array.isArray(user.cuisines) ? user.cuisines.join(', ') : '',
       yearsOfExperience: user.yearsOfExperience ?? '',
       location: user.location?.address || user.location || '',
       profileImage: user.profileImage || '',
@@ -97,6 +119,7 @@ const SettingsSection = ({ user, refresh }) => {
       bio: form.bio,
       yearsOfExperience: Number(form.yearsOfExperience) || 0,
       specialties: form.specialties.split(',').map((s) => s.trim()).filter(Boolean),
+      cuisines: form.cuisines.split(',').map((s) => s.trim()).filter(Boolean),
       location:
         locationCoords.latitude != null && locationCoords.longitude != null
           ? {
@@ -119,6 +142,30 @@ const SettingsSection = ({ user, refresh }) => {
     }
   };
 
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    setPwError('');
+    setPwMsg('');
+    if (pw.next.length < 8) {
+      setPwError('New password must be at least 8 characters long.');
+      return;
+    }
+    if (pw.next !== pw.confirm) {
+      setPwError('New password and confirmation do not match.');
+      return;
+    }
+    setPwSaving(true);
+    try {
+      await API.put('/auth/password', { currentPassword: pw.current, newPassword: pw.next }, { headers: getToken() });
+      setPwMsg('Password updated successfully.');
+      setPw({ current: '', next: '', confirm: '' });
+    } catch (err) {
+      setPwError(err.response?.data?.message || 'Unable to change your password.');
+    } finally {
+      setPwSaving(false);
+    }
+  };
+
   const inputCls =
     'w-full rounded-xl border border-[#EAD3DC] bg-white px-3.5 py-2.5 text-sm text-[#381E39] outline-none focus:border-[#E25C80] focus:ring-2 focus:ring-[#E25C80]/20';
 
@@ -131,10 +178,21 @@ const SettingsSection = ({ user, refresh }) => {
   );
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      <p className="text-xs text-[#76534A]">
-        Everything you fill in here shows up on your public profile — the page customers see in the chef directory. Nothing is fake or pre-filled: this is your real profile.
-      </p>
+    <>
+      <form onSubmit={handleSubmit} className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="max-w-xl text-xs text-[#76534A]">
+          Everything you fill in here shows up on your public profile — the page customers see in the chef directory. Nothing is fake or pre-filled: this is your real profile.
+        </p>
+        {user?.id && (
+          <Link
+            to={`/chefs/${user.id}`}
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#4B254B] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#391B39]"
+          >
+            <ExternalLink size={13} /> View my public profile
+          </Link>
+        )}
+      </div>
 
       {/* Cover photo */}
       <div className="overflow-hidden rounded-2xl border border-[#F0DCE4] bg-[#FFFDFC] shadow-sm">
@@ -151,10 +209,6 @@ const SettingsSection = ({ user, refresh }) => {
           <div className="absolute right-4 top-3">
             <label className="text-[10px] font-bold uppercase tracking-wider text-white/90">Cover photo</label>
           </div>
-        </div>
-        <div className="border-t border-[#F3E3E8] px-5 py-3">
-          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-[#A98990]">Or paste a cover image URL</label>
-          <input className={inputCls} value={form.coverImage} onChange={(e) => setForm({ ...form, coverImage: e.target.value })} placeholder="https://…" />
         </div>
       </div>
 
@@ -179,10 +233,6 @@ const SettingsSection = ({ user, refresh }) => {
                 <label className="mb-1 mt-3 block text-xs font-bold uppercase tracking-wider text-[#76534A]">Tagline</label>
                 <input className={inputCls} value={form.tagline} onChange={(e) => setForm({ ...form, tagline: e.target.value })} placeholder="Five-star Italian cooking for your table" />
               </div>
-            </div>
-            <div className="mt-4">
-              <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-[#A98990]">Or paste a profile photo URL</label>
-              <input className={inputCls} value={form.profileImage} onChange={(e) => setForm({ ...form, profileImage: e.target.value })} placeholder="https://…" />
             </div>
           </div>
 
@@ -211,18 +261,33 @@ const SettingsSection = ({ user, refresh }) => {
                 <input type="number" min="0" className={inputCls} value={form.yearsOfExperience} onChange={(e) => setForm({ ...form, yearsOfExperience: e.target.value })} placeholder="8" />
               </div>
             </div>
-            <div className="mt-4">
-              <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#76534A]">Specialties (comma separated)</label>
-              <input className={inputCls} value={form.specialties} onChange={(e) => setForm({ ...form, specialties: e.target.value })} placeholder="Biryani, Desserts, Vegan" />
-              {form.specialties.split(',').map((s) => s.trim()).filter(Boolean).length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {form.specialties.split(',').map((s) => s.trim()).filter(Boolean).map((spec) => (
-                    <span key={spec} className="rounded-lg border border-pink-100 bg-white px-3 py-1 text-xs font-semibold text-[#4B254B]">
-                      {spec}
-                    </span>
-                  ))}
-                </div>
-              )}
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#76534A]">Cuisines (comma separated)</label>
+                <input className={inputCls} value={form.cuisines} onChange={(e) => setForm({ ...form, cuisines: e.target.value })} placeholder="Italian, Japanese, Vegan" />
+                {form.cuisines.split(',').map((s) => s.trim()).filter(Boolean).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {form.cuisines.split(',').map((s) => s.trim()).filter(Boolean).map((c) => (
+                      <span key={c} className="rounded-lg border border-pink-100 bg-white px-3 py-1 text-xs font-semibold text-[#4B254B]">
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#76534A]">Specialties (comma separated)</label>
+                <input className={inputCls} value={form.specialties} onChange={(e) => setForm({ ...form, specialties: e.target.value })} placeholder="Biryani, Desserts, Vegan" />
+                {form.specialties.split(',').map((s) => s.trim()).filter(Boolean).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {form.specialties.split(',').map((s) => s.trim()).filter(Boolean).map((spec) => (
+                      <span key={spec} className="rounded-lg border border-pink-100 bg-white px-3 py-1 text-xs font-semibold text-[#4B254B]">
+                        {spec}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="mt-4">
               <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#76534A]">Bio</label>
@@ -280,6 +345,84 @@ const SettingsSection = ({ user, refresh }) => {
         </div>
       </div>
     </form>
+
+    {/* Change password */}
+    <div className="rounded-2xl border border-[#F0DCE4] bg-[#FFFDFC] p-5 shadow-sm">
+      <h3 className="flex items-center gap-2 font-display text-base font-semibold text-[#381E39]">
+        <KeyRound size={16} className="text-[#C45B7C]" /> Change password
+      </h3>
+      <p className="mt-1 text-xs text-[#76534A]">
+        You must enter your current password. After changing it, use the new password at your next login.
+      </p>
+
+      {pwMsg && (
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-700">
+          <CheckCircle2 size={14} /> {pwMsg}
+        </div>
+      )}
+      {pwError && (
+        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">{pwError}</div>
+      )}
+
+      <form onSubmit={handlePasswordSubmit} className="mt-4 grid max-w-lg grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#76534A]">Current password</label>
+          <input
+            type={showPw ? 'text' : 'password'}
+            className={inputCls}
+            value={pw.current}
+            onChange={(e) => setPw({ ...pw, current: e.target.value })}
+            autoComplete="current-password"
+            required
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#76534A]">New password</label>
+          <input
+            type={showPw ? 'text' : 'password'}
+            className={inputCls}
+            value={pw.next}
+            onChange={(e) => setPw({ ...pw, next: e.target.value })}
+            autoComplete="new-password"
+            minLength="8"
+            required
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#76534A]">Confirm new password</label>
+          <div className="flex gap-2">
+            <input
+              type={showPw ? 'text' : 'password'}
+              className={inputCls}
+              value={pw.confirm}
+              onChange={(e) => setPw({ ...pw, confirm: e.target.value })}
+              autoComplete="new-password"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPw((s) => !s)}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-[#E25C80]/40 bg-[#FFF0F5] px-3 py-2.5 text-xs font-semibold text-[#C45B7C] transition hover:bg-[#FCE3EC]"
+              title={showPw ? 'Hide passwords' : 'Show passwords'}
+            >
+              {showPw ? <EyeOff size={13} /> : <Eye size={13} />}
+              {showPw ? 'Hide' : 'Show'}
+            </button>
+          </div>
+        </div>
+        <div className="sm:col-span-2">
+          <button
+            type="submit"
+            disabled={pwSaving}
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#4B254B] px-6 py-2.5 text-xs font-semibold text-white hover:bg-[#391B39] disabled:opacity-60"
+          >
+            {pwSaving && <Loader2 size={12} className="animate-spin" />}
+            {pwSaving ? 'Updating…' : 'Update password'}
+          </button>
+        </div>
+      </form>
+      </div>
+    </>
   );
 };
 

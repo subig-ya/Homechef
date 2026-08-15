@@ -43,6 +43,12 @@ const userSchema = new mongoose.Schema(
         trim: true
       }
     ],
+    cuisines: [
+      {
+        type: String,
+        trim: true
+      }
+    ],
     yearsOfExperience: {
       type: Number,
       default: 0,
@@ -94,6 +100,53 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ['NONE', 'PENDING', 'APPROVED', 'REJECTED'],
       default: 'NONE'
+    },
+    // Moderation: admins can suspend a chef after verified reports. Banned
+    // users cannot log in or use any protected API route (see middleware).
+    isBanned: {
+      type: Boolean,
+      default: false
+    },
+    banCount: {
+      type: Number,
+      default: 0
+    },
+    bannedAt: {
+      type: Date,
+      default: null
+    },
+    banReason: {
+      type: String,
+      default: ''
+    },
+    // Password reset: only the SHA-256 hash of the token is stored, and it
+    // expires after 1 hour, so a leaked database can never be used to reset
+    // another user's password.
+    resetPasswordToken: {
+      type: String,
+      default: ''
+    },
+    resetPasswordExpire: {
+      type: Date,
+      default: null
+    },
+    // Chef reliability counters — fed by the order lifecycle and used as a
+    // secondary signal in chef ranking (a chef who ignores requests or cancels
+    // often ranks lower even with a perfect star rating).
+    totalRequestsReceived: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    expiredRequests: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    chefCancellations: {
+      type: Number,
+      default: 0,
+      min: 0
     }
   },
   {

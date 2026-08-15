@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
+import { getUser, clearAuth } from '../auth/storage';
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -14,9 +15,7 @@ const Navbar = () => {
   // =========================================================
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('homechef_user');
-
-    setUser(savedUser ? JSON.parse(savedUser) : null);
+    setUser(getUser());
     setMobileMenuOpen(false);
   }, [location.pathname]);
 
@@ -25,8 +24,7 @@ const Navbar = () => {
   // =========================================================
 
   const handleLogout = () => {
-    localStorage.removeItem('homechef_token');
-    localStorage.removeItem('homechef_user');
+    clearAuth();
 
     setUser(null);
     navigate('/');

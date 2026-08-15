@@ -13,6 +13,8 @@ import ReviewsSection from './chef/sections/ReviewsSection';
 import NotificationsSection from './chef/sections/NotificationsSection';
 import SettingsSection from './chef/sections/SettingsSection';
 import HelpSection from './chef/sections/HelpSection';
+import ChatSection from './chef/sections/ChatSection';
+import { clearAuth } from '../auth/storage';
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -28,7 +30,8 @@ import {
   Menu,
   X,
   ExternalLink,
-  Store
+  Store,
+  Mail
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -39,6 +42,7 @@ const NAV_ITEMS = [
   { id: 'portfolio', label: 'My Portfolio', icon: Camera },
   { id: 'availability', label: 'Availability', icon: Clock },
   { id: 'reviews', label: 'Reviews', icon: Star },
+  { id: 'messages', label: 'Messages', icon: Mail },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'settings', label: 'Profile Settings', icon: Settings },
   { id: 'help', label: 'Help & Settings', icon: LifeBuoy }
@@ -52,6 +56,7 @@ const SECTION_TITLES = {
   portfolio: 'My portfolio',
   availability: 'Availability',
   reviews: 'Reviews',
+  messages: 'Messages',
   notifications: 'Notifications',
   settings: 'Profile settings',
   help: 'Help & settings'
@@ -64,7 +69,6 @@ const ChefDashboardPage = () => {
 
   const { user, orders, bookings, dishes, slots, reviews, notifications, categories, loading, error, refresh } =
     useChefDashboardData();
-
   useEffect(() => {
     const token = localStorage.getItem('homechef_token');
     if (!token) {
@@ -77,8 +81,7 @@ const ChefDashboardPage = () => {
   }, [user, navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem('homechef_token');
-    localStorage.removeItem('homechef_user');
+    clearAuth();
     navigate('/login');
   };
 
@@ -102,6 +105,8 @@ const ChefDashboardPage = () => {
         return <AvailabilitySection slots={slots} refresh={refresh} />;
       case 'reviews':
         return <ReviewsSection reviews={reviews} />;
+      case 'messages':
+        return <ChatSection />;
       case 'notifications':
         return <NotificationsSection notifications={notifications} refresh={refresh} />;
       case 'settings':

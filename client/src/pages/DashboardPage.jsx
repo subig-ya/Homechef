@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import API from '../api/axios';
+import { getUser, setUser as persistUser, clearAuth } from '../auth/storage';
 import {
   LogOut,
   ArrowRight,
@@ -33,18 +34,21 @@ import {
 const ORDER_STATUS = {
   PENDING: { label: 'Pending', cls: 'text-amber-700 bg-amber-50 border-amber-200' },
   ACCEPTED: { label: 'Accepted', cls: 'text-[#E25C80] bg-[#E25C80]/5 border-[#E25C80]/20' },
+  PREPARING: { label: 'Preparing', cls: 'text-sky-700 bg-sky-50 border-sky-200' },
   PAYMENT_PENDING: { label: 'Payment Pending', cls: 'text-amber-700 bg-amber-50 border-amber-200' },
   PAID: { label: 'Paid', cls: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
   READY: { label: 'Ready', cls: 'text-sky-700 bg-sky-50 border-sky-200' },
   COMPLETED: { label: 'Completed', cls: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
   REJECTED: { label: 'Rejected', cls: 'text-red-700 bg-red-50 border-red-200' },
-  CANCELLED: { label: 'Cancelled', cls: 'text-slate-500 bg-slate-100 border-slate-200' }
+  CANCELLED: { label: 'Cancelled', cls: 'text-slate-500 bg-slate-100 border-slate-200' },
+  EXPIRED: { label: 'Expired', cls: 'text-slate-500 bg-slate-100 border-slate-200' }
 };
 
 const BOOKING_STATUS = {
   PENDING: { label: 'Pending', cls: 'text-amber-700 bg-amber-50 border-amber-200' },
   ACCEPTED: { label: 'Accepted', cls: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
-  REJECTED: { label: 'Rejected', cls: 'text-red-700 bg-red-50 border-red-200' }
+  REJECTED: { label: 'Rejected', cls: 'text-red-700 bg-red-50 border-red-200' },
+  EXPIRED: { label: 'Expired', cls: 'text-slate-500 bg-slate-100 border-slate-200' }
 };
 
 const greeting = () => {
@@ -58,6 +62,12 @@ const formatDate = (iso) => {
   if (!iso) return '';
   const d = new Date(iso);
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const formatDateTime = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 };
 
 const DashboardPage = () => {
@@ -103,8 +113,9 @@ const DashboardPage = () => {
   const [slotForm, setSlotForm] = useState({ date: '', slotType: 'MORNING', startTime: '', endTime: '', maxBookings: '1' });
   const [slotSubmitting, setSlotSubmitting] = useState(false);
 
-  const [profileForm, setProfileForm] = useState({ name: '', email: '', location: '', description: '', profileImage: '' });
+  const [profileForm, setProfileForm] = useState({ name: '', email: '', location: '', latitude: '', longitude: '', description: '', profileImage: '' });
   const [profileSaving, setProfileSaving] = useState(false);
+  const [locating, setLocating] = useState(false);
 
   // Fetch initial profile & customer info
   const loadInitialData = async () => {
@@ -118,7 +129,7 @@ const DashboardPage = () => {
     try {
       const meRes = await API.get('/auth/me', { headers });
       const currentUser = meRes.data.data;
-      localStorage.setItem('homechef_user', JSON.stringify(currentUser));
+      persistUser(currentUser);
       setUser(currentUser);
       
       // Default to chef mode if registered as HOMECHEF
@@ -133,6 +144,8 @@ const DashboardPage = () => {
         name: currentUser.name || '',
         email: currentUser.email || '',
         location: currentUser.location || '',
+        latitude: currentUser.latitude || '',
+        longitude: currentUser.longitude || '',
         description: currentUser.description || '',
         profileImage: currentUser.profileImage || ''
       });
@@ -197,8 +210,7 @@ const DashboardPage = () => {
   }, [mode, user, isChef]);
 
   const handleLogout = () => {
-    localStorage.removeItem('homechef_token');
-    localStorage.removeItem('homechef_user');
+    clearAuth();
     navigate('/');
   };
 
@@ -247,6 +259,30 @@ const DashboardPage = () => {
       setSellerBookings(updated.data.data || []);
     } catch (err) {
       setError(err.response?.data?.message || `Failed to ${action} booking`);
+    }
+  };
+
+  // Customer cancels their own order (refund rules handled by the backend).
+  const handleCancelOrder = async (orderId, orderStatus) => {
+    const refundHint =
+      orderStatus === 'PENDING'
+        ? 'You will receive a full refund.'
+        : orderStatus === 'ACCEPTED' || orderStatus === 'PREPARING'
+          ? 'A partial refund applies.'
+          : 'Contact the chef about this cancellation.';
+    if (!window.confirm(`Cancel this order? ${refundHint}`)) return;
+    setMessage('');
+    setError('');
+    const token = localStorage.getItem('homechef_token');
+    const headers = { Authorization: `Bearer ${token}` };
+
+    try {
+      const response = await API.post(`/orders/${orderId}/cancel`, { reason: 'Cancelled by customer' }, { headers });
+      setMessage(response.data.message || 'Order cancelled');
+      const updated = await API.get('/orders/my', { headers });
+      setMyOrders(updated.data.data || []);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to cancel order');
     }
   };
 
@@ -369,7 +405,8 @@ const DashboardPage = () => {
     }
   };
 
-  // Chef profile update
+  // Profile update (customer & chef). Location can be a typed address or a
+  // lat/lng pair captured from the device's GPS.
   const handleProfileSave = async (e) => {
     e.preventDefault();
     setProfileSaving(true);
@@ -379,8 +416,16 @@ const DashboardPage = () => {
     const headers = { Authorization: `Bearer ${token}` };
 
     try {
-      await API.put('/auth/profile', profileForm, { headers });
-      setMessage('Kitchen profile updated successfully');
+      await API.put('/auth/profile', {
+        name: profileForm.name,
+        profileImage: profileForm.profileImage,
+        location: {
+          address: profileForm.location || '',
+          latitude: Number(profileForm.latitude) || 0,
+          longitude: Number(profileForm.longitude) || 0
+        }
+      }, { headers });
+      setMessage('Profile updated successfully');
       const meRes = await API.get('/auth/me', { headers });
       setUser(meRes.data.data);
     } catch (err) {
@@ -388,6 +433,35 @@ const DashboardPage = () => {
     } finally {
       setProfileSaving(false);
     }
+  };
+
+  // Capture the customer's location straight from the device GPS.
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by this browser.');
+      return;
+    }
+    setLocating(true);
+    setError('');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const latitude = position.coords.latitude.toFixed(6);
+        const longitude = position.coords.longitude.toFixed(6);
+        setProfileForm((prev) => ({
+          ...prev,
+          latitude,
+          longitude,
+          location: prev.location || `${latitude}, ${longitude}`
+        }));
+        setLocating(false);
+        setMessage('Location captured from your device. Press Save to confirm.');
+      },
+      (err) => {
+        setLocating(false);
+        setError(`Unable to get your location: ${err.message}. Allow location access and try again.`);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+    );
   };
 
   // Spent calculation
@@ -411,7 +485,8 @@ const DashboardPage = () => {
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'explore', label: 'Explore Meals', icon: Utensils },
     { id: 'orders', label: 'My Orders', icon: ShoppingBag },
-    { id: 'bookings', label: 'Table Bookings', icon: CalendarDays }
+    { id: 'bookings', label: 'Table Bookings', icon: CalendarDays },
+    { id: 'profile', label: 'My Profile', icon: Settings }
   ];
 
   const chefMenu = [
@@ -804,20 +879,51 @@ const DashboardPage = () => {
                             <th className="pb-3 px-2">Total Amount</th>
                             <th className="pb-3 px-2">Date</th>
                             <th className="pb-3 px-2">Status</th>
+                            <th className="pb-3 px-2 text-right">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-pink-50">
                           {myOrders.map((order) => {
                             const status = ORDER_STATUS[order.status] || { label: order.status, cls: 'text-slate-600 bg-slate-50' };
+                            const cancellable = ['PENDING', 'ACCEPTED', 'PREPARING'].includes(order.status);
+                            const requestLine = [
+                              order.deliveryType === 'DELIVERY' ? 'Delivery' : 'Pickup',
+                              order.requestedTime ? `for ${formatDateTime(order.requestedTime)}` : 'ASAP'
+                            ].filter(Boolean).join(' · ');
                             return (
                               <tr key={order._id} className="hover:bg-pink-50/20 transition-colors">
                                 <td className="py-3.5 px-2 font-mono text-[10px] text-chocolate/60">#{order._id?.slice(-6)}</td>
                                 <td className="py-3.5 px-2 font-bold">{order.items?.map((i) => `${i.name} (${i.quantity})`).join(', ')}</td>
                                 <td className="py-3.5 px-2 font-semibold">{order.sellerId?.name || 'Local Kitchen'}</td>
-                                <td className="py-3.5 px-2 font-bold">Rs. {order.totalAmount}</td>
-                                <td className="py-3.5 px-2 text-chocolate/60">{formatDate(order.createdAt)}</td>
+                                <td className="py-3.5 px-2 font-bold">
+                                  Rs. {order.totalAmount}
+                                  {order.cancellation?.refundType && order.cancellation.refundType !== 'NONE' && (
+                                    <p className="mt-0.5 text-[9px] font-bold text-emerald-700">
+                                      Refund: {order.cancellation.refundType} · Rs. {order.cancellation.refundAmount}
+                                    </p>
+                                  )}
+                                </td>
+                                <td className="py-3.5 px-2">
+                                  <p className="text-chocolate/60">{formatDate(order.createdAt)}</p>
+                                  <p className="text-[9px] font-semibold text-chocolate/45">{requestLine}</p>
+                                </td>
                                 <td className="py-3.5 px-2">
                                   <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${status.cls}`}>{status.label}</span>
+                                  {order.expiresAt && order.status === 'PENDING' && (
+                                    <p className="mt-1 text-[9px] font-semibold text-chocolate/45">
+                                      Chef must respond by {formatDateTime(order.expiresAt)}
+                                    </p>
+                                  )}
+                                </td>
+                                <td className="py-3.5 px-2 text-right">
+                                  {cancellable && (
+                                    <button
+                                      onClick={() => handleCancelOrder(order._id, order.status)}
+                                      className="px-2.5 py-1 bg-red-50 text-red-600 border border-red-200 rounded-md text-[10px] font-bold hover:bg-red-100"
+                                    >
+                                      Cancel
+                                    </button>
+                                  )}
                                 </td>
                               </tr>
                             );
@@ -879,6 +985,107 @@ const DashboardPage = () => {
                       </table>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Tab: My Profile (Customer) */}
+              {activeTab === 'profile' && (
+                <div className="max-w-2xl bg-white border border-pink-100 rounded-3xl p-6 shadow-xs space-y-6 animate-fade-up">
+                  <div>
+                    <h3 className="font-display font-extrabold text-base">My Profile & Location</h3>
+                    <p className="text-xs text-chocolate/60">
+                      Keep your details up to date. Your location is used to match you with the nearest chefs.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleProfileSave} className="space-y-4">
+                    <div>
+                      <label className="mb-1 block text-[10px] font-bold text-chocolate/75 uppercase tracking-wider">Full Name</label>
+                      <input
+                        type="text"
+                        value={profileForm.name}
+                        onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                        className="w-full rounded-xl border border-pink-100 bg-cream/30 px-3.5 py-2.5 text-xs outline-none focus:ring-2 focus:ring-primary text-chocolate font-medium"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-[10px] font-bold text-chocolate/75 uppercase tracking-wider">Email (login)</label>
+                      <input
+                        type="email"
+                        value={profileForm.email}
+                        readOnly
+                        className="w-full cursor-not-allowed rounded-xl border border-pink-100 bg-pink-50/40 px-3.5 py-2.5 text-xs text-chocolate/60 font-medium"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-[10px] font-bold text-chocolate/75 uppercase tracking-wider">Area / Address</label>
+                      <input
+                        type="text"
+                        value={profileForm.location}
+                        onChange={(e) => setProfileForm({ ...profileForm, location: e.target.value })}
+                        placeholder="e.g. Baneshwor, Kathmandu"
+                        className="w-full rounded-xl border border-pink-100 bg-cream/30 px-3.5 py-2.5 text-xs outline-none focus:ring-2 focus:ring-primary text-chocolate font-medium"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-[10px] font-bold text-chocolate/75 uppercase tracking-wider">
+                        Device location (latitude, longitude)
+                      </label>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <input
+                          type="number"
+                          step="any"
+                          value={profileForm.latitude}
+                          onChange={(e) => setProfileForm({ ...profileForm, latitude: e.target.value })}
+                          placeholder="Latitude"
+                          className="w-full rounded-xl border border-pink-100 bg-cream/30 px-3.5 py-2.5 text-xs outline-none focus:ring-2 focus:ring-primary text-chocolate font-medium"
+                        />
+                        <input
+                          type="number"
+                          step="any"
+                          value={profileForm.longitude}
+                          onChange={(e) => setProfileForm({ ...profileForm, longitude: e.target.value })}
+                          placeholder="Longitude"
+                          className="w-full rounded-xl border border-pink-100 bg-cream/30 px-3.5 py-2.5 text-xs outline-none focus:ring-2 focus:ring-primary text-chocolate font-medium"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleUseCurrentLocation}
+                        disabled={locating}
+                        className="mt-2 inline-flex items-center gap-1.5 rounded-xl border border-pink-200 bg-white px-3.5 py-2 text-[11px] font-bold text-primary hover:bg-pink-50 disabled:opacity-60 transition-all"
+                      >
+                        <MapPin className="w-3.5 h-3.5" />
+                        {locating ? 'Locating...' : 'Use my current location'}
+                      </button>
+                      <p className="mt-1.5 text-[10px] text-chocolate/50">
+                        Uses your device's GPS. Enables "near me" chef matching via the Haversine distance formula.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-[10px] font-bold text-chocolate/75 uppercase tracking-wider">Profile Image URL (optional)</label>
+                      <input
+                        type="text"
+                        value={profileForm.profileImage}
+                        onChange={(e) => setProfileForm({ ...profileForm, profileImage: e.target.value })}
+                        placeholder="https://images.unsplash.com/..."
+                        className="w-full rounded-xl border border-pink-100 bg-cream/30 px-3.5 py-2.5 text-xs outline-none focus:ring-2 focus:ring-primary text-chocolate font-medium"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={profileSaving}
+                      className="w-full py-3 bg-[#4B254B] hover:bg-[#391B39] text-white text-xs font-bold rounded-xl disabled:opacity-60 transition-all shadow-xs"
+                    >
+                      {profileSaving ? 'Saving Profile...' : 'Save Profile'}
+                    </button>
+                  </form>
                 </div>
               )}
             </>
@@ -1247,15 +1454,35 @@ const DashboardPage = () => {
                         <tbody className="divide-y divide-pink-50">
                           {sellerOrders.map((order) => {
                             const status = ORDER_STATUS[order.status] || { label: order.status, cls: 'text-slate-600 bg-slate-50' };
+                            const requestLine = [
+                              order.deliveryType === 'DELIVERY' ? 'Delivery' : 'Pickup',
+                              order.requestedTime ? formatDateTime(order.requestedTime) : 'ASAP'
+                            ].filter(Boolean).join(' · ');
                             return (
                               <tr key={order._id} className="hover:bg-pink-50/20 transition-colors">
                                 <td className="py-3.5 px-2 font-mono text-[10px] text-chocolate/60">#{order._id?.slice(-6)}</td>
                                 <td className="py-3.5 px-2 font-semibold">{order.customerId?.name || 'Customer'}</td>
-                                <td className="py-3.5 px-2 font-bold">{order.items?.map((i) => `${i.name} × ${i.quantity}`).join(', ')}</td>
-                                <td className="py-3.5 px-2 font-bold text-primary">Rs. {order.totalAmount}</td>
+                                <td className="py-3.5 px-2 font-bold">
+                                  {order.items?.map((i) => `${i.name} × ${i.quantity}`).join(', ')}
+                                  <p className="mt-0.5 text-[9px] font-semibold text-chocolate/45">{requestLine}</p>
+                                </td>
+                                <td className="py-3.5 px-2 font-bold text-primary">
+                                  Rs. {order.totalAmount}
+                                  {order.distanceKm != null && (
+                                    <p className="text-[9px] font-semibold text-chocolate/45">~{order.distanceKm.toFixed(1)} km away</p>
+                                  )}
+                                </td>
                                 <td className="py-3.5 px-2 text-chocolate/60">{formatDate(order.createdAt)}</td>
                                 <td className="py-3.5 px-2">
                                   <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${status.cls}`}>{status.label}</span>
+                                  {order.expiresAt && order.status === 'PENDING' && (
+                                    <p className="mt-1 text-[9px] font-bold text-red-500">Respond by {formatDateTime(order.expiresAt)}</p>
+                                  )}
+                                  {order.cancellation?.refundType && order.cancellation.refundType !== 'NONE' && (
+                                    <p className="mt-1 text-[9px] font-bold text-emerald-700">
+                                      {order.cancellation.refundType} refund · Rs. {order.cancellation.refundAmount}
+                                    </p>
+                                  )}
                                 </td>
                                 <td className="py-3.5 px-2 text-right">
                                   <div className="flex gap-1 justify-end">
@@ -1291,7 +1518,7 @@ const DashboardPage = () => {
                                         Mark Done
                                       </button>
                                     )}
-                                    {['COMPLETED', 'REJECTED', 'CANCELLED'].includes(order.status) && (
+                                    {['COMPLETED', 'REJECTED', 'CANCELLED', 'EXPIRED'].includes(order.status) && (
                                       <span className="text-chocolate/30 text-[10px] font-bold">Processed</span>
                                     )}
                                   </div>

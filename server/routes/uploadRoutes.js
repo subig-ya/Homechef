@@ -19,9 +19,16 @@ const storage = multer.diskStorage({
   }
 });
 
-// Images only, and reject anything larger than 5 MB.
+// Images only, and reject anything larger than 5 MB. Both the file extension
+// AND the declared MIME type must be an allowed image type.
+const ALLOWED_IMAGE_EXT = /\.(jpg|jpeg|png|webp|gif)$/i;
+const ALLOWED_IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
 const fileFilter = (req, file, cb) => {
-  if (/\.(jpg|jpeg|png|webp|gif)$/i.test(file.originalname)) {
+  const extOk = ALLOWED_IMAGE_EXT.test(file.originalname || '');
+  const mimeOk = ALLOWED_IMAGE_MIME.has(file.mimetype || '');
+
+  if (extOk && mimeOk) {
     cb(null, true);
   } else {
     cb(new Error('Only image files (jpg, jpeg, png, webp, gif) are allowed.'));

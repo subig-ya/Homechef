@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import API from '../api/axios';
+import ChatPanel from '../components/chat/ChatPanel';
 import {
   Star,
   MapPin,
@@ -11,7 +12,11 @@ import {
   Clock,
   ChefHat,
   Quote,
-  UtensilsCrossed
+  UtensilsCrossed,
+  Flag,
+  X,
+  Heart,
+  MessageSquareText
 } from 'lucide-react';
 
 const FALLBACK_COVER = 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=1200';
@@ -36,6 +41,17 @@ const ChefPublicProfilePage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [formMsg, setFormMsg] = useState('');
   const [formErr, setFormErr] = useState('');
+
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportMsg, setReportMsg] = useState('');
+  const [reportErr, setReportErr] = useState('');
+
+  const [chatOpen, setChatOpen] = useState(false);
+
+  const [favorited, setFavorited] = useState(false);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
 
   const isLoggedIn = !!localStorage.getItem('homechef_token');
   const currentUser = (() => {
@@ -89,6 +105,69 @@ const ChefPublicProfilePage = () => {
       setFormErr(err.response?.data?.message || 'Unable to post your review');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleReportSubmit = async (e) => {
+    e.preventDefault();
+    setReportSubmitting(true);
+    setReportMsg('');
+    setReportErr('');
+
+    try {
+      const token = localStorage.getItem('homechef_token');
+      await API.post(
+        '/reports',
+        { targetType: 'CHEF', targetId: id, reason: reportReason.trim() },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setReportMsg('Report submitted. Our team will review it shortly.');
+      setReportReason('');
+      setTimeout(() => {
+        setReportOpen(false);
+        setReportMsg('');
+      }, 2000);
+    } catch (err) {
+      setReportErr(err.response?.data?.message || 'Unable to submit your report');
+    } finally {
+      setReportSubmitting(false);
+    }
+  };
+
+  const loadFavoriteState = async (chefId) => {
+    const token = localStorage.getItem('homechef_token');
+    if (!token) return;
+    try {
+      const res = await API.get('/favorites', { headers: { Authorization: `Bearer ${token}` } });
+      const favs = res.data.data || [];
+      setFavorited(favs.some((f) => f.targetType === 'CHEF' && String(f.targetId) === String(chefId)));
+    } catch {
+      /* keep current state */
+    }
+  };
+
+  useEffect(() => {
+    if (data?.chef?._id && isLoggedIn && !isOwnProfile) {
+      loadFavoriteState(data.chef._id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, isLoggedIn, isOwnProfile]);
+
+  const handleToggleFavorite = async () => {
+    const token = localStorage.getItem('homechef_token');
+    if (!token || !data?.chef?._id) return;
+    setFavoriteLoading(true);
+    try {
+      const res = await API.post(
+        '/favorites/toggle',
+        { targetType: 'CHEF', targetId: data.chef._id },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setFavorited(res.data.data?.favorited ?? !favorited);
+    } catch (err) {
+      setFormErr(err.response?.data?.message || 'Unable to update favorites.');
+    } finally {
+      setFavoriteLoading(false);
     }
   };
 
@@ -181,13 +260,15 @@ const ChefPublicProfilePage = () => {
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600">
               {chef.bio || 'This chef is getting their profile ready.'}
             </p>
-            {chef.specialties?.length > 0 && (
+            {(chef.cuisines?.length > 0 || chef.specialties?.length > 0) && (
               <div className="mt-4 flex flex-wrap gap-2">
-                {chef.specialties.map((spec) => (
-                  <span
-                    key={spec}
-                    className="rounded-lg border border-pink-100 bg-white px-3 py-1 text-xs font-semibold text-[#4B254B]"
-                  >
+                {chef.cuisines?.map((c) => (
+                  <span key={c} className="rounded-lg border border-[#E25C80]/30 bg-white px-3 py-1 text-xs font-semibold text-[#4B254B]">
+                    {c}
+                  </span>
+                ))}
+                {chef.specialties?.map((spec) => (
+                  <span key={spec} className="rounded-lg border border-pink-100 bg-white px-3 py-1 text-xs font-semibold text-[#4B254B]">
                     {spec}
                   </span>
                 ))}
@@ -409,12 +490,55 @@ const ChefPublicProfilePage = () => {
             >
               <CalendarDays className="h-4 w-4" /> Book this chef
             </button>
+            {isLoggedIn && !isOwnProfile ? (
+              <button
+                onClick={() => {
+                  setChatOpen(true);
+                  setReportErr('');
+                  setReportMsg('');
+                }}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-[#4B254B]/20 bg-[#FFF9F5] py-3 text-sm font-bold text-[#4B254B] transition-colors hover:bg-pink-50"
+              >
+                <MessageSquareText className="h-4 w-4" /> Message {chef.name.split(' ')[0]}
+              </button>
+            ) : !isLoggedIn ? (
+              <Link
+                to="/login"
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-[#4B254B]/20 bg-[#FFF9F5] py-3 text-sm font-bold text-[#4B254B] transition-colors hover:bg-pink-50"
+              >
+                <MessageSquareText className="h-4 w-4" /> Log in to message {chef.name.split(' ')[0]}
+              </Link>
+            ) : null}
+            {isLoggedIn && !isOwnProfile && (
+              <button
+                onClick={handleToggleFavorite}
+                disabled={favoriteLoading}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-[#E25C80]/25 bg-white py-3 text-sm font-bold text-[#4B254B] transition-colors hover:bg-[#FCECEF] disabled:opacity-60"
+              >
+                <Heart
+                  className={`h-4 w-4 ${favorited ? 'fill-[#E25C80] text-[#E25C80]' : 'text-[#E25C80]'}`}
+                />
+                {favorited ? 'Saved to favorites' : 'Save this chef'}
+              </button>
+            )}
             <Link
               to="/food"
               className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-pink-100 bg-white py-3 text-sm font-bold text-[#4B254B] transition-colors hover:bg-pink-50"
             >
               Browse their food <ArrowRight className="h-4 w-4" />
             </Link>
+            {isLoggedIn && !isOwnProfile && (
+              <button
+                onClick={() => {
+                  setReportOpen(true);
+                  setReportErr('');
+                  setReportMsg('');
+                }}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-red-100 bg-white py-2.5 text-xs font-semibold text-red-500 transition-colors hover:bg-red-50"
+              >
+                <Flag className="h-3.5 w-3.5" /> Report this chef
+              </button>
+            )}
           </div>
 
           <div className="rounded-3xl border border-pink-100/80 bg-white p-6 text-sm">
@@ -444,6 +568,86 @@ const ChefPublicProfilePage = () => {
           </div>
         </aside>
       </div>
+
+      {/* Report modal */}
+      {reportOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <form onSubmit={handleReportSubmit} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-[#381E39]">Report {chef.name.split(' ')[0]}</h3>
+              <button
+                type="button"
+                onClick={() => setReportOpen(false)}
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Let us know why this profile should be reviewed by our team. False reports waste admin time, so please be
+              accurate.
+            </p>
+
+            {reportMsg && (
+              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">
+                {reportMsg}
+              </div>
+            )}
+            {reportErr && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700">
+                {reportErr}
+              </div>
+            )}
+
+            <textarea
+              value={reportReason}
+              onChange={(e) => setReportReason(e.target.value)}
+              rows="4"
+              required
+              minLength={5}
+              placeholder="What's the issue? (e.g. inappropriate content, no-show, unsafe behaviour...)"
+              className="mt-4 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-red-400"
+            />
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setReportOpen(false)}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={reportSubmitting}
+                className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {reportSubmitting ? 'Submitting...' : 'Submit report'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+      {/* Chat drawer */}
+      {chatOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
+          <div
+            className="flex h-full w-full max-w-md flex-col bg-white shadow-2xl"
+            style={{ animation: 'none' }}
+          >
+            <ChatPanel
+              otherUser={{
+                id: chef._id,
+                name: chef.name,
+                profileImage: chef.profileImage,
+                role: chef.role
+              }}
+              onClose={() => setChatOpen(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

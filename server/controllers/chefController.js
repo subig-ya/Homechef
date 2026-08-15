@@ -5,8 +5,9 @@ const { calculateHaversineDistance, isWithinBoundingBox, calculateBayesianRating
 
 // Everything a customer needs to see on a chef profile. Password is never
 // selected anywhere — this projection simply avoids extra document weight.
+// The reliability counters are read-only ranking inputs.
 const CHEF_PROFILE_FIELDS =
-  'name profileImage coverImage location latitude longitude tagline bio specialties yearsOfExperience portfolio phone';
+  'name profileImage coverImage location latitude longitude tagline bio specialties cuisines yearsOfExperience portfolio phone totalRequestsReceived expiredRequests chefCancellations';
 
 // Aggregate real reviews into an { averageRating, reviewCount } map per chef.
 // Ratings come from the Review collection, never from seeded dish defaults.
@@ -32,17 +33,35 @@ const buildRatingMap = async (sellerIds) => {
 /**
  * GET /api/chefs — public chef directory.
  * A chef is any registered user who has created at least one listing. Each
- * entry carries real aggregate ratings, portfolio count, and the nearest
- * Haversine distance to the requesting user.
+ * entry carries real aggregate ratings, a Bayesian-smoothed rating, portfolio
+ * count, and the nearest Haversine distance to the requesting user. Results
+ * are ranked by Bayesian rating (highest first) so a handful of 5-star reviews
+ * cannot out-rank chefs with many reliable ratings.
  */
 const getChefs = async (req, res, next) => {
   try {
     const userLat = req.query.userLat ? Number(req.query.userLat) : 40.7128;
     const userLon = req.query.userLon ? Number(req.query.userLon) : -74.006;
+    const search = req.query.search ? String(req.query.search).trim() : '';
+    const sort = req.query.sort || 'top'; // 'top' (default) | 'nearby'
 
     // Find users who own at least one listing.
     const sellers = await Dish.find().distinct('sellerId');
-    const chefDocs = await User.find({ _id: { $in: sellers } }).select(CHEF_PROFILE_FIELDS);
+
+    let query = { _id: { $in: sellers } };
+    if (search) {
+      const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      query.$or = [
+        { name: regex },
+        { tagline: regex },
+        { bio: regex },
+        { 'location.address': regex },
+        { specialties: regex },
+        { cuisines: regex }
+      ];
+    }
+
+    const chefDocs = await User.find(query).select(CHEF_PROFILE_FIELDS);
 
     const chefIds = chefDocs.map((chef) => chef._id);
 
@@ -73,20 +92,52 @@ const getChefs = async (req, res, next) => {
           distance = calculateHaversineDistance(userLat, userLon, Number(c.latitude) || userLat, Number(c.longitude) || userLon);
         }
 
+        // Bayesian-smoothed rating (Algorithm 7.3): pulls chefs with a handful
+        // of 5-star reviews back toward the global mean so the directory ranks
+        // the most *reliably* rated chefs first — highest at the top.
+        const bayesianRating =
+          rating.reviewCount > 0
+            ? Number(calculateBayesianRating(rating.averageRating, rating.reviewCount).toFixed(2))
+            : 0;
+
+        // Reliability as a secondary signal: a chef who ignores requests or
+        // cancels on customers ranks lower even with a perfect star rating.
+        // No-response weighs more than chef-cancellations.
+        const totalRequests = Number(c.totalRequestsReceived) || 0;
+        const noResponseRate = totalRequests ? Number((Number(c.expiredRequests) || 0) / totalRequests) : 0;
+        const chefCancellationRate = totalRequests ? Number((Number(c.chefCancellations) || 0) / totalRequests) : 0;
+        const reliability = Math.max(0, 1 - (noResponseRate * 0.7 + chefCancellationRate * 0.3));
+        // Subtracts up to 1.0 rating point; noResponseRate alone halves it.
+        const reliabilityPenalty = Number(((1 - reliability) * 1.0).toFixed(2));
+
         return {
           ...c,
           listingCount: listingCounts[id] || 0,
           averageRating: rating.averageRating,
           reviewCount: rating.reviewCount,
+          bayesianRating,
+          reliability: Number(reliability.toFixed(2)),
+          noResponseRate: Number(noResponseRate.toFixed(2)),
+          chefCancellationRate: Number(chefCancellationRate.toFixed(2)),
           portfolioCount: (c.portfolio || []).length,
           distance
         };
       })
+      // Sort order: "nearby" ranks by Haversine distance (unknown distance
+      // last); the default "top" ranks by reliability-adjusted Bayesian rating
+      // desc → review count desc → listing count desc.
       .sort(
-        (a, b) =>
-          b.averageRating - a.averageRating ||
-          b.reviewCount - a.reviewCount ||
-          b.listingCount - a.listingCount
+        sort === 'nearby'
+          ? (a, b) => {
+              if (a.distance === null && b.distance === null) return b.bayesianRating - a.bayesianRating;
+              if (a.distance === null) return 1;
+              if (b.distance === null) return -1;
+              return a.distance - b.distance;
+            }
+          : (a, b) =>
+              b.bayesianRating - b.reliabilityPenalty - (a.bayesianRating - a.reliabilityPenalty) ||
+              b.reviewCount - a.reviewCount ||
+              b.listingCount - a.listingCount
       );
 
     res.status(200).json({ success: true, count: data.length, message: 'Chefs fetched successfully', data });
@@ -154,7 +205,7 @@ const getChefById = async (req, res, next) => {
  */
 const updateMyProfile = async (req, res, next) => {
   try {
-    const { name, tagline, bio, specialties, yearsOfExperience, coverImage, profileImage, location } = req.body;
+    const { name, tagline, bio, specialties, cuisines, yearsOfExperience, coverImage, profileImage, location } = req.body;
 
     if (name !== undefined && String(name).trim()) req.user.name = String(name).trim();
     if (tagline !== undefined) req.user.tagline = String(tagline);
@@ -167,6 +218,13 @@ const updateMyProfile = async (req, res, next) => {
         ? specialties.map((s) => String(s).trim()).filter(Boolean)
         : typeof specialties === 'string'
           ? specialties.split(',').map((s) => s.trim()).filter(Boolean)
+          : [];
+    }
+    if (cuisines !== undefined) {
+      req.user.cuisines = Array.isArray(cuisines)
+        ? cuisines.map((s) => String(s).trim()).filter(Boolean)
+        : typeof cuisines === 'string'
+          ? cuisines.split(',').map((s) => s.trim()).filter(Boolean)
           : [];
     }
     if (location !== undefined) {

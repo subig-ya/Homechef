@@ -85,13 +85,19 @@ const bookingSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['PENDING', 'ACCEPTED', 'PAYMENT_PENDING', 'CONFIRMED', 'COMPLETED', 'REJECTED', 'CANCELLED'],
+      enum: ['PENDING', 'ACCEPTED', 'PAYMENT_PENDING', 'CONFIRMED', 'COMPLETED', 'REJECTED', 'CANCELLED', 'EXPIRED'],
       default: 'PENDING'
     },
     paymentStatus: {
       type: String,
       enum: ['UNPAID', 'PENDING', 'PAID', 'FAILED', 'CANCELLED'],
       default: 'UNPAID'
+    },
+    // PENDING booking requests must be answered by the chef before this
+    // deadline or they auto-expire (and free the reserved slot capacity).
+    expiresAt: {
+      type: Date,
+      default: null
     }
   },
   {

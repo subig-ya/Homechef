@@ -1,6 +1,16 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+// The JWT secret must come from the environment. The server refuses to boot
+// without it (checked in server.js), so there is never a hard-coded fallback
+// secret that an attacker could use to forge admin tokens.
+const getJwtSecret = () => {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET environment variable is required.');
+  }
+  return process.env.JWT_SECRET;
+};
+
 const protect = async (req, res, next) => {
   try {
     let token = req.headers.authorization || '';
@@ -14,7 +24,7 @@ const protect = async (req, res, next) => {
 
     token = token.split(' ')[1];
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'homechef-secret');
+    const decoded = jwt.verify(token, getJwtSecret());
     const user = await User.findById(decoded.id).select('-password');
 
     if (!user) {
@@ -24,9 +34,24 @@ const protect = async (req, res, next) => {
       });
     }
 
+    // Suspended/removed accounts are rejected on every request so a ban takes
+    // effect immediately, even for a token that was already issued.
+    if (user.isBanned) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account has been suspended. Contact support for assistance.'
+      });
+    }
+
     req.user = user;
     next();
   } catch (error) {
+    if (error.message === 'jwt expired') {
+      return res.status(401).json({
+        success: false,
+        message: 'Session expired. Please log in again.'
+      });
+    }
     return res.status(401).json({
       success: false,
       message: 'Not authorized. Invalid token.'
@@ -57,4 +82,4 @@ const homechef = (req, res, next) => {
   });
 };
 
-module.exports = { protect, admin, homechef };
+module.exports = { protect, admin, homechef, getJwtSecret };
