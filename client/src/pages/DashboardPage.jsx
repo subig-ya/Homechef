@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import API from '../api/axios';
 import {
-  ChefHat,
   LogOut,
   ArrowRight,
   Star,
@@ -74,7 +73,6 @@ const DashboardPage = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Common customer data
-  const [application, setApplication] = useState(null);
   const [recommendedDishes, setRecommendedDishes] = useState([]);
   const [chefs, setChefs] = useState([]);
   const [myOrders, setMyOrders] = useState([]);
@@ -108,9 +106,6 @@ const DashboardPage = () => {
   const [profileForm, setProfileForm] = useState({ name: '', email: '', location: '', description: '', profileImage: '' });
   const [profileSaving, setProfileSaving] = useState(false);
 
-  const [applyForm, setApplyForm] = useState({ fullName: '', phone: '', location: '', about: '', specialties: '' });
-  const [applySubmitting, setApplySubmitting] = useState(false);
-
   // Fetch initial profile & customer info
   const loadInitialData = async () => {
     const token = localStorage.getItem('homechef_token');
@@ -142,35 +137,13 @@ const DashboardPage = () => {
         profileImage: currentUser.profileImage || ''
       });
 
-      const [appRes, dishRes, sellerRes, orderRes, bookingRes] = await Promise.allSettled([
-        API.get('/homechef/me', { headers }),
+      const [dishRes, sellerRes, orderRes, bookingRes] = await Promise.allSettled([
         API.get('/dishes?sort=recommended'),
         API.get('/sellers'),
         API.get('/orders/my', { headers }),
         API.get('/bookings/my', { headers })
       ]);
 
-      if (appRes.status === 'fulfilled') {
-        const appData = appRes.value.data.data || null;
-        setApplication(appData);
-        if (appData) {
-          setApplyForm({
-            fullName: appData.fullName || currentUser.name || '',
-            phone: appData.phone || currentUser.phone || '',
-            location: appData.location || currentUser.location || '',
-            about: appData.about || '',
-            specialties: Array.isArray(appData.specialties) ? appData.specialties.join(', ') : ''
-          });
-        } else {
-          setApplyForm({
-            fullName: currentUser.name || '',
-            phone: currentUser.phone || '',
-            location: currentUser.location || '',
-            about: '',
-            specialties: ''
-          });
-        }
-      }
       if (dishRes.status === 'fulfilled') setRecommendedDishes(dishRes.value.data.data?.slice(0, 4) || []);
       if (sellerRes.status === 'fulfilled') setChefs(sellerRes.value.data.data || []);
       if (orderRes.status === 'fulfilled') setMyOrders(orderRes.value.data.data || []);
@@ -241,14 +214,6 @@ const DashboardPage = () => {
     } catch (err) {
       setError(err.response?.data?.message || 'Unable to update notification');
     }
-  };
-
-  const handleModeSwitch = (newMode) => {
-    setMode(newMode);
-    setActiveTab('overview');
-    setSidebarOpen(false);
-    setMessage('');
-    setError('');
   };
 
   // Chef order status actions
@@ -425,30 +390,6 @@ const DashboardPage = () => {
     }
   };
 
-  // Customer submit application
-  const handleApplySubmit = async (e) => {
-    e.preventDefault();
-    setApplySubmitting(true);
-    setMessage('');
-    setError('');
-    const token = localStorage.getItem('homechef_token');
-    const headers = { Authorization: `Bearer ${token}` };
-
-    try {
-      const payload = {
-        ...applyForm,
-        specialties: applyForm.specialties.split(',').map((s) => s.trim()).filter(Boolean)
-      };
-      const response = await API.post('/homechef/apply', payload, { headers });
-      setApplication(response.data.data);
-      setMessage('Your HomeChef account is now active. You can start using kitchen features immediately.');
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to submit application');
-    } finally {
-      setApplySubmitting(false);
-    }
-  };
-
   // Spent calculation
   const totalSpent = myOrders
     .filter((o) => o.status !== 'REJECTED' && o.status !== 'CANCELLED')
@@ -470,8 +411,7 @@ const DashboardPage = () => {
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'explore', label: 'Explore Meals', icon: Utensils },
     { id: 'orders', label: 'My Orders', icon: ShoppingBag },
-    { id: 'bookings', label: 'Table Bookings', icon: CalendarDays },
-    { id: 'become-chef', label: 'Become a Chef', icon: ChefHat }
+    { id: 'bookings', label: 'Table Bookings', icon: CalendarDays }
   ];
 
   const chefMenu = [
@@ -530,28 +470,6 @@ const DashboardPage = () => {
               </span>
             </div>
           </div>
-
-          {/* Mode Switcher (Customer vs. Chef Kitchen) */}
-          {isChef && (
-            <div className="bg-black/20 p-1 rounded-xl flex gap-1 text-xs font-bold border border-white/5">
-              <button
-                onClick={() => handleModeSwitch('customer')}
-                className={`flex-1 py-1.5 rounded-lg text-center transition-all ${
-                  mode === 'customer' ? 'bg-primary text-white shadow-xs' : 'text-pink-100/60 hover:text-white'
-                }`}
-              >
-                Customer
-              </button>
-              <button
-                onClick={() => handleModeSwitch('chef')}
-                className={`flex-1 py-1.5 rounded-lg text-center transition-all ${
-                  mode === 'chef' ? 'bg-primary text-white shadow-xs' : 'text-pink-100/60 hover:text-white'
-                }`}
-              >
-                Kitchen
-              </button>
-            </div>
-          )}
 
           {/* Menu list */}
           <nav className="space-y-1.5">
@@ -959,109 +877,6 @@ const DashboardPage = () => {
                           })}
                         </tbody>
                       </table>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tab: Become a Chef Application */}
-              {activeTab === 'become-chef' && (
-                <div className="space-y-6 animate-fade-up">
-                  <div className="bg-white border border-pink-100 rounded-3xl p-6 shadow-xs">
-                    <h3 className="font-display font-extrabold text-base">Become a HomeChef</h3>
-                    <p className="text-xs text-chocolate/60 mt-1">Submit your details to start selling food listings to the community</p>
-
-                    {application && (
-                      <div className={`mt-6 p-4 rounded-2xl border flex items-start gap-3 bg-pink-50/40 border-pink-100/80`}>
-                        <div className="mt-0.5"><Clock className="w-4 h-4 text-primary" /></div>
-                        <div>
-                          <p className="text-xs font-bold text-chocolate">Application Status: {application.status}</p>
-                          <p className="text-[10px] text-chocolate/60 mt-1">
-                            {application.status === 'PENDING' && 'Your application is currently being reviewed. Once approved, you can toggle Chef Mode here!'}
-                            {application.status === 'APPROVED' && 'Congratulations! Refresh this page to activate your kitchen dashboard.'}
-                            {application.status === 'REJECTED' && 'Your application was rejected by admins. You can fill out and re-submit a new application.'}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {(!application || application.status === 'REJECTED') && (
-                    <div className="bg-white border border-pink-100 rounded-3xl p-6 shadow-xs">
-                      <h3 className="font-display font-extrabold text-sm mb-4">Application Form</h3>
-                      <form onSubmit={handleApplySubmit} className="space-y-4">
-                        <div>
-                          <label className="mb-1 block text-[10px] font-bold text-chocolate/70 uppercase tracking-wider">Full Name</label>
-                          <input
-                            type="text"
-                            name="fullName"
-                            value={applyForm.fullName}
-                            onChange={(e) => setApplyForm({ ...applyForm, fullName: e.target.value })}
-                            className="w-full rounded-xl border border-pink-100 bg-cream/30 px-3.5 py-2.5 text-xs outline-none focus:ring-2 focus:ring-primary text-chocolate font-medium"
-                            placeholder="Full name matching ID"
-                            required
-                          />
-                        </div>
-
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <div>
-                            <label className="mb-1 block text-[10px] font-bold text-chocolate/70 uppercase tracking-wider">Phone</label>
-                            <input
-                              type="text"
-                              name="phone"
-                              value={applyForm.phone}
-                              onChange={(e) => setApplyForm({ ...applyForm, phone: e.target.value })}
-                              className="w-full rounded-xl border border-pink-100 bg-cream/30 px-3.5 py-2.5 text-xs outline-none focus:ring-2 focus:ring-primary text-chocolate font-medium"
-                              placeholder="+977 98XXXXXXXX"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-[10px] font-bold text-chocolate/70 uppercase tracking-wider">Location</label>
-                            <input
-                              type="text"
-                              name="location"
-                              value={applyForm.location}
-                              onChange={(e) => setApplyForm({ ...applyForm, location: e.target.value })}
-                              className="w-full rounded-xl border border-pink-100 bg-cream/30 px-3.5 py-2.5 text-xs outline-none focus:ring-2 focus:ring-primary text-chocolate font-medium"
-                              placeholder="Kathmandu"
-                              required
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="mb-1 block text-[10px] font-bold text-chocolate/70 uppercase tracking-wider">About you</label>
-                          <textarea
-                            name="about"
-                            value={applyForm.about}
-                            onChange={(e) => setApplyForm({ ...applyForm, about: e.target.value })}
-                            rows="3"
-                            className="w-full rounded-xl border border-pink-100 bg-cream/30 px-3.5 py-2.5 text-xs outline-none focus:ring-2 focus:ring-primary text-chocolate font-medium"
-                            placeholder="Tell us about your culinary background..."
-                          />
-                        </div>
-
-                        <div>
-                          <label className="mb-1 block text-[10px] font-bold text-chocolate/70 uppercase tracking-wider">Specialties (comma separated)</label>
-                          <input
-                            type="text"
-                            name="specialties"
-                            value={applyForm.specialties}
-                            onChange={(e) => setApplyForm({ ...applyForm, specialties: e.target.value })}
-                            className="w-full rounded-xl border border-pink-100 bg-cream/30 px-3.5 py-2.5 text-xs outline-none focus:ring-2 focus:ring-primary text-chocolate font-medium"
-                            placeholder="Pasta, Cakes, Cookies"
-                          />
-                        </div>
-
-                        <button
-                          type="submit"
-                          disabled={applySubmitting}
-                          className="w-full py-3 bg-primary hover:bg-primary-hover text-white text-xs font-bold rounded-xl disabled:opacity-60 transition-all shadow-xs"
-                        >
-                          {applySubmitting ? 'Submitting Application...' : 'Submit Application'}
-                        </button>
-                      </form>
                     </div>
                   )}
                 </div>

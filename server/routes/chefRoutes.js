@@ -5,7 +5,8 @@ const {
   getChefById,
   updateMyProfile,
   addPortfolioItem,
-  removePortfolioItem
+  removePortfolioItem,
+  getMyReviews
 } = require('../controllers/chefController');
 const { protect, homechef } = require('../middleware/auth');
 
@@ -14,6 +15,7 @@ router.get('/', getChefs);
 router.get('/:id', getChefById);
 
 // HomeChef-only profile & portfolio management.
+router.get('/me/reviews', protect, homechef, getMyReviews);
 router.put('/me/profile', protect, homechef, updateMyProfile);
 router.post('/me/portfolio', protect, homechef, addPortfolioItem);
 router.delete('/me/portfolio/:itemId', protect, homechef, removePortfolioItem);

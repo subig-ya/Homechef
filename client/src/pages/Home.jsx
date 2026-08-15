@@ -1,499 +1,392 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+﻿import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import API from '../api/axios';
 import {
-  Search,
-  MapPin,
   ArrowRight,
   Star,
+  MapPin,
+  CalendarCheck,
   Heart,
-  CheckCircle2,
-  RefreshCw,
+  Utensils,
+  ShieldCheck,
   ChefHat,
-  Sparkles,
-  TrendingUp,
-  ChevronRight
 } from 'lucide-react';
-
-// Cute inline SVGs
-const CupcakeSVG = () => (
-  <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 opacity-90 animate-float">
-    <path d="M32 12C24 12 20 18 20 24C20 25.5 20.5 27 21.5 28.2C22.5 29.5 24 30 26 30C27.5 30 29 29.5 30 28.5C30.5 28 31 28 32 28C33 28 33.5 28 34 28.5C35 29.5 36.5 30 38 30C40 30 41.5 29.5 42.5 28.2C43.5 27 44 25.5 44 24C44 18 40 12 32 12Z" fill="#FBCFE8" stroke="#563124" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M22 30L25 50C25.2 51.5 26.5 52.5 28 52.5H36C37.5 52.5 38.8 51.5 39 50L42 30" fill="#FDE047" stroke="#563124" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-    <line x1="28" y1="30" x2="30" y2="52" stroke="#563124" strokeWidth="2.5" />
-    <line x1="32" y1="30" x2="32" y2="52" stroke="#563124" strokeWidth="2.5" />
-    <line x1="36" y1="30" x2="34" y2="52" stroke="#563124" strokeWidth="2.5" />
-    <circle cx="32" cy="9" r="4.5" fill="#E11D48" stroke="#563124" strokeWidth="2.5" />
-  </svg>
-);
-
-const CakeSliceSVG = () => (
-  <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 opacity-90 animate-float-slow">
-    <path d="M12 40L44 14L52 24L12 50V40Z" fill="#FFFBEB" stroke="#563124" strokeWidth="3" strokeLinejoin="round" />
-    <path d="M44 14L12 40V34L44 8L52 18L44 14Z" fill="#FBCFE8" stroke="#563124" strokeWidth="3" strokeLinejoin="round" />
-    <path d="M44 14L52 24V34L44 24V14Z" fill="#FDA4AF" stroke="#563124" strokeWidth="3" strokeLinejoin="round" />
-    <path d="M12 45L44 19L52 29" stroke="#563124" strokeWidth="2.5" strokeLinecap="round" />
-    <circle cx="48" cy="11" r="3.5" fill="#E11D48" stroke="#563124" strokeWidth="2" />
-  </svg>
-);
-
-const BunnySVG = () => (
-  <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 opacity-90 animate-float">
-    <path d="M22 26C22 16 26 12 28 12C30 12 30 18 30 26" fill="#FFF" stroke="#563124" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M24 24C24 18 26 15 27 15C28 15 28 19 28 24" fill="#FFD2E9" />
-    <path d="M34 26C34 16 38 12 40 12C42 12 42 18 42 26" fill="#FFF" stroke="#563124" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M36 24C36 18 38 15 39 15C40 15 40 19 40 24" fill="#FFD2E9" />
-    <circle cx="32" cy="38" r="14" fill="#FFF" stroke="#563124" strokeWidth="3" />
-    <circle cx="28" cy="36" r="1.5" fill="#563124" />
-    <circle cx="36" cy="36" r="1.5" fill="#563124" />
-    <circle cx="25" cy="40" r="2" fill="#FFB7D5" />
-    <circle cx="39" cy="40" r="2" fill="#FFB7D5" />
-    <path d="M31 39.5L32 40.5L33 39.5" stroke="#563124" strokeWidth="1.5" strokeLinecap="round" />
-  </svg>
-);
-
-const CookieSVG = () => (
-  <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 opacity-90 animate-float-slow">
-    <circle cx="32" cy="32" r="22" fill="#FCD34D" stroke="#563124" strokeWidth="3" />
-    <circle cx="12" cy="32" r="6" fill="#FDFBF7" />
-    <path d="M12 26C14 26 15 28 15 32C15 36 14 38 12 38" stroke="#563124" strokeWidth="3" strokeLinecap="round" />
-    <circle cx="26" cy="24" r="3" fill="#563124" />
-    <circle cx="38" cy="22" r="2.5" fill="#563124" />
-    <circle cx="32" cy="34" r="3.5" fill="#563124" />
-    <circle cx="42" cy="36" r="3" fill="#563124" />
-    <circle cx="24" cy="40" r="2.5" fill="#563124" />
-  </svg>
-);
-
-const MOCK_DESSERTS = [
-  {
-    _id: "mock-1",
-    name: "Mongo Mochi",
-    description: "Delicious sweet mochi filled with fresh mango puree.",
-    price: 29.00,
-    image: "https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?w=500",
-    cuisine: "Asian Dessert",
-    rating: 4.9,
-    sellerId: { name: "Chef Lin", profileImage: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100" }
-  },
-  {
-    _id: "mock-2",
-    name: "Matcha Roll",
-    description: "A fluffy sponge cake roll with fresh green tea cream.",
-    price: 35.00,
-    image: "https://images.unsplash.com/photo-1534432122685-f4ed6f1883b0?w=500",
-    cuisine: "Japanese",
-    rating: 4.8,
-    sellerId: { name: "Chef Lin", profileImage: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100" }
-  },
-  {
-    _id: "mock-3",
-    name: "Strawberry Cake Roll",
-    description: "A light cake roll filled with fresh whipped strawberry cream.",
-    price: 125.00,
-    image: "https://images.unsplash.com/photo-1603532648955-039310d9ed75?w=500",
-    cuisine: "Dutch",
-    rating: 5.0,
-    sellerId: { name: "Chef Baker", profileImage: "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=100" }
-  },
-  {
-    _id: "mock-4",
-    name: "Purin",
-    description: "A soft and sweet dessert with a caramel liquid.",
-    price: 14.00,
-    image: "https://images.unsplash.com/photo-1488477181946-6428a0291777?w=500",
-    cuisine: "Japanese",
-    rating: 4.7,
-    sellerId: { name: "Chef Lin", profileImage: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100" }
-  },
-  {
-    _id: "mock-5",
-    name: "Red Bean Pancakes",
-    description: "A sweet treat consisting of a paste made from red beans.",
-    price: 19.00,
-    image: "https://images.unsplash.com/photo-1590301157890-4810ed352733?w=500",
-    cuisine: "Traditional",
-    rating: 4.6,
-    sellerId: { name: "Chef Lin", profileImage: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100" }
-  },
-  {
-    _id: "mock-6",
-    name: "Coconut Jelly",
-    description: "A clean, translucent jelly dessert made by coconut milk.",
-    price: 24.00,
-    image: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500",
-    cuisine: "Tropical",
-    rating: 4.9,
-    sellerId: { name: "Chef Lin", profileImage: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100" }
-  },
-  {
-    _id: "mock-7",
-    name: "Japanese Cheesecake",
-    description: "The combination of creamy cheese cake and light fluffy sponge.",
-    price: 64.00,
-    image: "https://images.unsplash.com/photo-1533134242443-d4fd215305ad?w=500",
-    cuisine: "Japanese",
-    rating: 4.9,
-    sellerId: { name: "Chef Sakura", profileImage: "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?w=100" }
-  },
-  {
-    _id: "mock-8",
-    name: "Coconut Pandan Cake",
-    description: "A green colored sponge cake flavored with pandan juice.",
-    price: 52.00,
-    image: "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?w=500",
-    cuisine: "Asian",
-    rating: 4.8,
-    sellerId: { name: "Chef Lin", profileImage: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100" }
-  }
-];
-
-const CRAVING_SUGGESTIONS = ['Momo', 'Pasta', 'Matcha roll', 'Tiramisu', 'Mochi', 'Cheesecake'];
 
 const Home = () => {
   const navigate = useNavigate();
-  const [craving, setCraving] = useState('');
-  const [location, setLocation] = useState('');
-  const [suggestionIndex, setSuggestionIndex] = useState(0);
-  const [featuredDishes, setFeaturedDishes] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [favorites, setFavorites] = useState(() => JSON.parse(localStorage.getItem('homechef_favorites') || '{}'));
-  const [healthData, setHealthData] = useState(null);
-  const [loadingHealth, setLoadingHealth] = useState(false);
-  const [showStatus, setShowStatus] = useState(false);
+  const [chefs, setChefs] = useState([]);
+  const [loadingChefs, setLoadingChefs] = useState(true);
 
-  const isLoggedIn = !!localStorage.getItem('homechef_token');
-  const becomeChefPath = isLoggedIn ? '/become-chef' : '/register';
+  const reasons = [
+    {
+      icon: ShieldCheck,
+      title: 'Trusted Reviews',
+      text: 'See ratings and reviews from people who have actually experienced the food.',
+    },
+    {
+      icon: MapPin,
+      title: 'Nearby Chefs',
+      text: 'Discover talented chefs and unique dining experiences around your area.',
+    },
+    {
+      icon: CalendarCheck,
+      title: 'Easy Booking',
+      text: 'Find a chef, choose your experience, and book without complicated steps.',
+    },
+    {
+      icon: Utensils,
+      title: 'Variety of Cuisine',
+      text: 'Explore everything from traditional favorites to new and exciting flavors.',
+    },
+  ];
 
-  useEffect(() => {
-    const id = setInterval(() => setSuggestionIndex((i) => (i + 1) % CRAVING_SUGGESTIONS.length), 3000);
-    return () => clearInterval(id);
-  }, []);
-
-  const handleHeroSearch = (e) => {
-    e.preventDefault();
-    let queryParams = [];
-    if (craving.trim()) queryParams.push(`search=${encodeURIComponent(craving.trim())}`);
-    if (location.trim()) queryParams.push(`location=${encodeURIComponent(location.trim())}`);
-    const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
-    navigate(`/food${queryString}`);
-  };
-
-  const checkHealth = async () => {
-    setLoadingHealth(true);
-    try {
-      const response = await API.get('/health');
-      setHealthData(response.data);
-    } catch (err) {
-      setHealthData({ databaseStatus: 'Disconnected', message: err.message });
-    } finally {
-      setLoadingHealth(false);
-    }
-  };
+  const handleFindChefs = () => navigate('/chefs');
+  const handleChefProfile = (chef) => navigate(`/chefs/${chef._id}`);
+  const handleBecomeChef = () => navigate('/become-chef');
 
   useEffect(() => {
-    checkHealth();
-    const fetchHomeData = async () => {
+    const fetchChefs = async () => {
       try {
-        const [dishesRes, catsRes] = await Promise.all([
-          API.get('/dishes?sort=recommended'),
-          API.get('/categories')
-        ]);
-        setFeaturedDishes(dishesRes.data.data || []);
-        setCategories(catsRes.data.data || []);
+        const response = await API.get('/chefs');
+        const allChefs = response.data.data || [];
+        setChefs(allChefs.slice(0, 4));
       } catch (err) {
-        setFeaturedDishes([]);
-        setCategories([]);
+        setChefs([]);
+      } finally {
+        setLoadingChefs(false);
       }
     };
-    fetchHomeData();
+
+    fetchChefs();
   }, []);
 
-  const toggleFavorite = (id) => {
-    setFavorites((prev) => {
-      const next = { ...prev, [id]: !prev[id] };
-      localStorage.setItem('homechef_favorites', JSON.stringify(next));
-      return next;
-    });
-  };
-
-  // Combine dynamic dishes with mock items to ensure a populated Sweet Charm page layout
-  const displayDishes = [...featuredDishes];
-  for (const mock of MOCK_DESSERTS) {
-    if (displayDishes.length >= 8) break;
-    if (!displayDishes.some(d => d.name.toLowerCase() === mock.name.toLowerCase())) {
-      displayDishes.push(mock);
-    }
-  }
-
-  const featuredRef = useRef(null);
-  const handleDiscoverSweets = () => {
-    featuredRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   return (
-    <div className="bg-outer-pink min-h-screen p-4 sm:p-8 flex items-center justify-center">
-      {/* Outer rounded card frame exactly like reference image */}
-      <div className="bg-cream w-full max-w-5xl rounded-[3rem] shadow-2xl border-[12px] border-white p-6 sm:p-12 relative overflow-hidden">
-        
-        {/* Floating Doodles */}
-        <div className="absolute top-8 left-8 hidden lg:block"><CupcakeSVG /></div>
-        <div className="absolute top-8 right-8 hidden lg:block"><CakeSliceSVG /></div>
-        <div className="absolute top-96 left-6 hidden lg:block"><BunnySVG /></div>
-        <div className="absolute top-96 right-6 hidden lg:block"><CookieSVG /></div>
+    <main className="min-h-screen overflow-hidden bg-[#FFF9F5] text-chocolate">
+      <section id="home" className="relative bg-[#FFF9F5]">
+        <div className="absolute -left-24 top-24 h-56 w-56 rounded-full bg-[#F8DCE6]/40 blur-3xl" />
+        <div className="absolute -right-24 top-16 h-64 w-64 rounded-full bg-[#F3DED4]/40 blur-3xl" />
 
-        {/* Brand Header */}
-        <section className="text-center pt-8 pb-4 relative z-10">
-          <h1 className="font-cursive text-5xl sm:text-6xl text-chocolate tracking-tight animate-fade-up">
-            HomeChef
-          </h1>
-          <p className="font-display text-sm text-chocolate/80 mt-2 max-w-md mx-auto tracking-wide font-semibold animate-fade-up" style={{ animationDelay: '80ms' }}>
-            The first homemade kitchen marketplace in your neighborhood
+        <div className="relative mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
+          <div className="grid min-h-[720px] items-center gap-8 py-12 lg:grid-cols-[1fr_0.9fr] lg:py-10">
+            <div className="max-w-xl">
+              <h1 className="font-cursive text-[3.5rem] leading-[1.03] text-chocolate sm:text-6xl lg:text-[4.9rem]">
+                Find a Chef You Love,
+                <span className="mt-2 block text-[#B94F73]">
+                  Book a Meal You Crave
+                </span>
+              </h1>
+
+              <p className="mt-8 max-w-lg text-base leading-8 text-[#76534A] sm:text-lg">
+                Explore local chefs, discover mouthwatering meals, and book a
+                dining experience made just for you.
+              </p>
+
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handleFindChefs}
+                  className="inline-flex items-center gap-2 rounded-full bg-[#D96F91] px-7 py-3.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(217,111,145,0.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#C45B7C]"
+                >
+                  Find a Chef
+                  <ArrowRight size={16} />
+                </button>
+
+                <button
+                  onClick={handleFindChefs}
+                  className="inline-flex items-center rounded-full border border-[#E5C8D1] bg-transparent px-7 py-3.5 text-sm font-semibold text-chocolate transition duration-200 hover:border-[#D96F91] hover:bg-[#FFF0F5]"
+                >
+                  Explore Chefs
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-center lg:justify-end">
+              <div className="relative h-[420px] w-[350px] sm:h-[500px] sm:w-[420px]">
+                <div className="absolute left-10 top-8 z-0 h-28 w-28 rounded-full bg-[#F5D7E0]" />
+                <div className="absolute bottom-14 right-8 z-0 h-32 w-32 rounded-full bg-[#F1DED4]" />
+
+                <img
+                  src="/images/chefhead.png"
+                  alt="HomeChef chef"
+                  className="absolute left-1/2 top-1/2 z-10 h-[430px] w-auto -translate-x-1/2 -translate-y-1/2 object-contain"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Become a HomeChef - only background color changed */}
+      <section className="mx-4 mb-12 rounded-[2.5rem] bg-[#B94F73] p-8 text-center text-white sm:p-12">
+        <div className="mx-auto max-w-xl space-y-4">
+          <h3 className="font-cursive text-3xl">Become a HomeChef</h3>
+
+          <p className="text-xs font-semibold leading-relaxed text-pink-100/80">
+            Turn your cooking passion into a home-based business. Join
+            instantly and start listing kitchen items, slots, and bookings.
           </p>
-          <div className="mt-6 animate-fade-up" style={{ animationDelay: '160ms' }}>
+
+          <div className="pt-2">
             <button
-              onClick={handleDiscoverSweets}
-              className="px-6 py-2.5 bg-primary hover:bg-primary-hover text-white text-xs font-bold rounded-full transition-all shadow-xs"
+              onClick={handleBecomeChef}
+              className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-xs font-bold text-chocolate shadow-md transition-all hover:bg-pink-50 active:scale-95"
             >
-              Discover our sweets
+              Join our community
+              <ArrowRight className="h-4 w-4 text-[#C45B7C]" />
             </button>
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* Chef Illustration */}
-        <section className="relative z-10">
-          <img
-            src="https://i.pinimg.com/736x/c9/34/e4/c934e46b425b3d04ea75225684752b33.jpg"
-            alt="HomeChef chef"
-            className="w-40 h-40 sm:w-48 sm:h-48 mx-auto object-cover rounded-full border-[10px] border-white shadow-xl"
-          />
-        </section>
-
-        {/* Craving & Location Search Form */}
-        <section className="max-w-2xl mx-auto mb-16 relative z-10 px-4">
-          <form
-            onSubmit={handleHeroSearch}
-            className="bg-white p-2.5 rounded-full shadow-md border border-pink-100/80 flex flex-col sm:flex-row items-center gap-2"
-          >
-            <div className="flex items-center gap-2 px-3 py-1 flex-1 w-full border-b sm:border-b-0 sm:border-r border-pink-50">
-              <Search className="w-4 h-4 text-chocolate/50 shrink-0" />
-              <input
-                type="text"
-                placeholder={`Craving ${CRAVING_SUGGESTIONS[suggestionIndex]}...`}
-                value={craving}
-                onChange={(e) => setCraving(e.target.value)}
-                className="w-full text-xs text-chocolate placeholder-chocolate/30 focus:outline-none bg-transparent"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 px-3 py-1 flex-1 w-full">
-              <MapPin className="w-4 h-4 text-chocolate/50 shrink-0" />
-              <input
-                type="text"
-                placeholder="Location"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                className="w-full text-xs text-chocolate placeholder-chocolate/30 focus:outline-none bg-transparent"
-              />
+      <section id="chefs" className="bg-white py-20 sm:py-24">
+        <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
+          <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
+            <div>
+              <h2 className="font-serif text-4xl font-bold tracking-[-0.035em] text-chocolate sm:text-5xl">
+                Our Best Chefs
+              </h2>
             </div>
 
             <button
-              type="submit"
-              className="w-full sm:w-auto px-5 py-2.5 bg-primary hover:bg-primary-hover text-white rounded-full transition-all flex items-center justify-center shrink-0 text-xs font-bold"
+              onClick={handleFindChefs}
+              className="group inline-flex w-fit items-center gap-2 text-sm font-semibold text-[#A75D7A] transition hover:text-[#C45B7C]"
             >
-              Search
+              View all chefs
+              <ArrowRight
+                size={16}
+                className="transition-transform group-hover:translate-x-1"
+              />
             </button>
-          </form>
-
-          {/* Quick links */}
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-4 text-[11px] text-chocolate/60">
-            <span className="flex items-center gap-1 font-bold">
-              <TrendingUp className="w-3.5 h-3.5 text-primary" /> Popular:
-            </span>
-            {['Mochi', 'Pasta', 'Vegan', 'Cheesecake'].map((chip) => (
-              <button
-                key={chip}
-                onClick={() => navigate(`/food?search=${encodeURIComponent(chip)}`)}
-                className="px-3 py-1 rounded-full bg-white border border-pink-100 hover:bg-primary hover:text-white transition-colors"
-              >
-                {chip}
-              </button>
-            ))}
           </div>
-        </section>
 
-        {/* Section Heading: Featured Desserts */}
-        <section ref={featuredRef} className="text-center mb-10 pt-4 scroll-mt-24">
-          <h2 className="font-cursive text-3xl sm:text-4xl text-chocolate flex items-center justify-center gap-3">
-            <span className="text-primary text-xl">✦</span>
-            Featured Desserts of the week
-            <span className="text-primary text-xl">✦</span>
-          </h2>
-        </section>
+          <p className="mt-6 max-w-2xl text-sm leading-7 text-[#76534A]">
+            Meet passionate chefs who bring their own style, experience, and
+            love of food to every meal.
+          </p>
 
-        {/* Card Grid exactly matching reference style */}
-        <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-12">
-          {displayDishes.map((dish) => (
-            <div
-              key={dish._id}
-              onClick={() => navigate('/food')}
-              className="bg-white border border-pink-100/50 rounded-[2.5rem] p-4 shadow-sm hover:shadow-md transition-shadow group cursor-pointer flex flex-col justify-between"
-            >
-              <div>
-                <div className="relative aspect-square overflow-hidden bg-pink-50/20 rounded-[2rem] mb-4">
-                  <img
-                    src={dish.image || 'https://images.unsplash.com/photo-1621996346565-e3def616404c?w=600'}
-                    alt={dish.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleFavorite(dish._id); }}
-                    className={`absolute top-3.5 right-3.5 p-2 rounded-full transition-colors shadow-xs ${
-                      favorites[dish._id]
-                        ? 'bg-primary text-white'
-                        : 'bg-white/90 text-chocolate/30 hover:text-primary'
-                    }`}
-                  >
-                    <Heart className={`w-3.5 h-3.5 ${favorites[dish._id] ? 'fill-white' : ''}`} />
-                  </button>
+          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {loadingChefs ? (
+              <p className="text-sm text-[#92766E]">
+                Loading best chefs...
+              </p>
+            ) : chefs.length === 0 ? (
+              <p className="text-sm text-[#92766E]">
+                No chefs available right now.
+              </p>
+            ) : (
+              chefs.map((chef) => (
+                <article
+                  key={chef._id}
+                  className="group overflow-hidden rounded-3xl border border-[#F0DFE4] bg-[#FFFDFB] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(101,58,48,0.09)]"
+                >
+                  <div className="relative aspect-[4/4.6] overflow-hidden bg-[#FCECEF]">
+                    <img
+                      src={
+                        chef.profileImage ||
+                        chef.coverImage ||
+                        '/images/chef-placeholder.jpg'
+                      }
+                      alt={chef.name}
+                      className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+                    />
+
+                    <div className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-xs font-semibold shadow-sm">
+                      {chef.averageRating > 0 ? (
+                        <>
+                          <Star
+                            size={13}
+                            className="fill-[#E9AE4B] text-[#E9AE4B]"
+                          />
+                          <span className="text-chocolate">
+                            {chef.averageRating.toFixed(1)}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <ChefHat
+                            size={13}
+                            className="text-[#B86A83]"
+                          />
+                          <span className="text-chocolate">New</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-5">
+                    <h3 className="font-serif text-xl font-semibold text-chocolate">
+                      {chef.name}
+                    </h3>
+
+                    <p className="mt-1 text-sm text-[#A75D7A]">
+                      {chef.specialties?.[0] || 'Various dishes'}
+                    </p>
+
+                    <div className="mt-3 flex items-center gap-1.5 text-xs text-[#92766E]">
+                      <MapPin size={13} />
+                      {chef.location || 'Home kitchen'}
+                    </div>
+
+                    <div className="mt-4 flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map((number) => (
+                        <Star
+                          key={number}
+                          size={13}
+                          className={
+                            number <= Math.round(chef.averageRating)
+                              ? 'fill-[#E9AE4B] text-[#E9AE4B]'
+                              : 'text-[#DCCDC8]'
+                          }
+                        />
+                      ))}
+
+                      <span className="ml-1.5 text-xs text-[#92766E]">
+                        {chef.reviewCount} reviews
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => handleChefProfile(chef)}
+                      className="mt-5 flex w-full items-center justify-center gap-2 rounded-full border border-[#E8CBD5] bg-[#FFF0F5] py-2.5 text-xs font-semibold text-[#A75D7A] transition hover:border-[#D96F91] hover:bg-[#D96F91] hover:text-white"
+                    >
+                      View Profile
+                      <ArrowRight size={14} />
+                    </button>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section id="about" className="bg-[#FFF4F6] py-20 sm:py-24">
+        <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
+          <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-20">
+            <div className="relative">
+              <div className="absolute -bottom-5 -left-5 h-28 w-28 rounded-full bg-[#F2D6DE]" />
+
+              <div className="relative overflow-hidden rounded-[2.5rem]">
+                <img
+                  src="/images/chefaboutus.png"
+                  alt="Chef preparing food"
+                  className="h-[420px] w-full object-cover mix-blend-multiply sm:h-[520px]"
+                />
+              </div>
+            </div>
+
+            <div className="max-w-xl">
+              <h2 className="font-serif text-4xl font-bold leading-[1.08] tracking-[-0.035em] text-chocolate sm:text-5xl">
+                Good Food Starts
+                <span className="block text-[#C45B7C]">
+                  With Great Chefs
+                </span>
+              </h2>
+
+              <p className="mt-7 text-sm leading-8 text-[#76534A] sm:text-base">
+                HomeChef brings people and passionate chefs together over the
+                love of good food. Whether you're craving a homemade favorite,
+                planning a gathering, or simply looking for something new to
+                taste, HomeChef helps you find the right chef for the occasion.
+              </p>
+
+              <p className="mt-5 text-sm leading-8 text-[#76534A] sm:text-base">
+                Discover talented chefs, explore their specialties, choose
+                what you love, and book with ease. For chefs, it's a place to
+                showcase their skills, share their food, and connect with people
+                who appreciate it.
+              </p>
+
+              <div className="mt-7 flex items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#D96F91] shadow-sm">
+                  <Heart size={18} className="fill-[#F4B3C8]" />
                 </div>
 
-                <div className="px-1 space-y-1">
-                  <h3 className="font-display font-bold text-chocolate text-base leading-snug group-hover:text-primary transition-colors">
-                    {dish.name}
+                <p className="font-cursive text-xl text-[#A75D7A]">
+                  Find your chef. Follow your cravings.
+                </p>
+              </div>
+
+              <button
+                onClick={handleFindChefs}
+                className="mt-8 inline-flex items-center gap-2 rounded-full bg-[#D96F91] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#C45B7C]"
+              >
+                Discover Chefs
+                <ArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="why-us" className="bg-[#FFF9F5] py-20 sm:py-24">
+        <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
+          <div className="max-w-2xl">
+            <h2 className="font-serif text-4xl font-bold tracking-[-0.035em] text-chocolate sm:text-5xl">
+              Why Choose Us?
+            </h2>
+
+            <p className="mt-5 max-w-xl text-sm leading-7 text-[#76534A] sm:text-base">
+              We make it easier to discover talented chefs, find food you love,
+              and book a dining experience that feels personal.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {reasons.map((reason) => {
+              const Icon = reason.icon;
+
+              return (
+                <div
+                  key={reason.title}
+                  className="group rounded-2xl border border-[#EEDFE3] bg-white p-7 transition duration-300 hover:-translate-y-1 hover:border-[#E7C7D1] hover:shadow-[0_15px_35px_rgba(101,58,48,0.07)]"
+                >
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#FCE3EC] text-[#C45B7C] transition duration-300 group-hover:rotate-[-4deg] group-hover:scale-105">
+                    <Icon size={21} />
+                  </div>
+
+                  <h3 className="mt-6 text-lg font-semibold text-chocolate">
+                    {reason.title}
                   </h3>
-                  <p className="text-[11px] text-chocolate/60 line-clamp-2 leading-relaxed">
-                    {dish.description}
+
+                  <p className="mt-3 text-sm leading-7 text-[#76534A]">
+                    {reason.text}
                   </p>
                 </div>
-              </div>
-
-              <div className="px-1 pt-3 mt-4 border-t border-pink-50 flex items-center justify-between">
-                <span className="font-display font-extrabold text-chocolate text-base">
-                  Rs. {dish.price}
-                </span>
-                <span className="w-8 h-8 rounded-full bg-[#FEF08A] hover:bg-amber-300 flex items-center justify-center text-chocolate transition-colors">
-                  <ChevronRight className="w-4 h-4 stroke-[3]" />
-                </span>
-              </div>
-            </div>
-          ))}
-        </section>
-
-        {/* View all Button */}
-        <section className="text-center mb-16">
-          <Link
-            to="/food"
-            className="inline-block px-8 py-2.5 bg-primary hover:bg-primary-hover text-white text-xs font-bold rounded-full transition-all shadow-xs"
-          >
-            View all
-          </Link>
-        </section>
-
-        {/* Browse by Category Section */}
-        {categories.length > 0 && (
-          <section className="mb-16">
-            <h3 className="font-cursive text-2xl text-chocolate text-center mb-8">Browse Categories</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {categories.slice(0, 4).map((cat) => (
-                <Link
-                  key={cat._id}
-                  to={`/food?category=${encodeURIComponent(cat.name)}`}
-                  className="group relative h-36 rounded-[2rem] overflow-hidden shadow-xs hover:shadow-md transition-all"
-                >
-                  <img
-                    src={cat.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600'}
-                    alt={cat.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-chocolate/80 to-transparent" />
-                  <div className="absolute bottom-4 left-4 right-4">
-                    <p className="text-sm font-bold text-white leading-tight">{cat.name}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* How It Works */}
-        <section className="bg-white/40 rounded-[2.5rem] border border-pink-100/50 p-8 sm:p-10 mb-16">
-          <h3 className="font-cursive text-2xl text-chocolate text-center mb-8">How it works</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              { title: 'Browse & Order', desc: 'Find amazing homemade dishes from registered home chefs around your community.' },
-              { title: 'Support Kitchens', desc: 'Each purchase supports local home chefs directly, putting food and love first.' },
-              { title: 'Become a Chef', desc: 'Love cooking? Turn it into income by submitting a brief online application.' }
-            ].map((step, i) => (
-              <div key={step.title} className="bg-white/80 rounded-[2rem] p-6 text-center border border-pink-50 relative">
-                <span className="absolute top-4 right-5 font-cursive text-2xl text-primary/20">0{i + 1}</span>
-                <h4 className="font-display font-extrabold text-chocolate text-base mb-2">{step.title}</h4>
-                <p className="text-xs text-chocolate/75 leading-relaxed">{step.desc}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* Become a chef banner */}
-        <section className="bg-chocolate text-white rounded-[2.5rem] p-8 sm:p-12 text-center relative overflow-hidden mb-12">
-          <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full bg-primary/20 blur-2xl" />
-          <div className="absolute -bottom-20 -left-20 w-60 h-60 rounded-full bg-primary/10 blur-2xl" />
-          
-          <div className="relative z-10 max-w-xl mx-auto space-y-4">
-            <h3 className="font-cursive text-3xl">Become a HomeChef</h3>
-            <p className="text-xs text-pink-100/80 leading-relaxed font-semibold">
-              Turn your cooking passion into a home-based business. Join instantly and start listing kitchen items, slots, and bookings.
-            </p>
-            <div className="pt-2">
-              <Link
-                to={becomeChefPath}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-white hover:bg-pink-50 text-chocolate text-xs font-bold transition-all shadow-md active:scale-95"
-              >
-                Apply to join our community <ArrowRight className="w-4 h-4 text-primary" />
-              </Link>
-            </div>
-          </div>
-        </section>
+      <section className="bg-white px-5 py-20 sm:py-24">
+        <div className="mx-auto max-w-5xl rounded-4xl bg-[#FFF2F5] px-6 py-16 text-center sm:px-12">
+          <p className="text-xs font-semibold tracking-[0.16em] text-[#B86A83]">
+            YOUR NEXT MEAL STARTS HERE
+          </p>
 
-        {/* MongoDB Status bar */}
-        <section className="border border-pink-100 rounded-2xl p-4 bg-white/70 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
-              <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-chocolate flex items-center gap-2">
-                <span>System Status</span>
-                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md text-[10px]">Connected</span>
-              </p>
-              <p className="text-[10px] text-chocolate/60">
-                MongoDB Database Active · Haversine Proximity Ranking Active
-              </p>
-            </div>
-          </div>
+          <h2 className="mt-4 font-serif text-4xl font-bold tracking-[-0.035em] text-chocolate sm:text-5xl">
+            Ready to Find Your Chef?
+          </h2>
+
+          <p className="mt-3 font-cursive text-xl text-[#C45B7C]">
+            Your next delicious story starts here ✦
+          </p>
+
+          <p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-[#76534A] sm:text-base">
+            Explore local chefs, discover something delicious, and book a
+            dining experience made around what you love.
+          </p>
+
           <button
-            onClick={() => setShowStatus(!showStatus)}
-            className="text-[10px] font-bold px-3 py-1.5 bg-white border border-pink-100 hover:bg-pink-50 text-chocolate rounded-lg transition-colors"
+            onClick={handleFindChefs}
+            className="mt-8 inline-flex items-center gap-2 rounded-full bg-[#D96F91] px-7 py-3.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(217,111,145,0.16)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#C45B7C]"
           >
-            {showStatus ? 'Hide status' : 'Show status'}
+            Explore Chefs
+            <ArrowRight size={16} />
           </button>
-        </section>
-
-        {showStatus && (
-          <div className="mt-3 p-4 bg-chocolate/10 border border-pink-100/50 text-chocolate rounded-xl text-xs space-y-2 font-mono">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-primary">Express API status: /api/health</span>
-              <button onClick={checkHealth} className="flex items-center gap-1 text-chocolate/60 hover:text-chocolate">
-                <RefreshCw className={`w-3 h-3 ${loadingHealth ? 'animate-spin' : ''}`} /> Refresh
-              </button>
-            </div>
-            <p>Database: {healthData?.databaseStatus || 'Connected'}</p>
-            <p>Timestamp: {healthData?.timestamp || new Date().toISOString()}</p>
-          </div>
-        )}
-
-      </div>
-    </div>
+        </div>
+      </section>
+    </main>
   );
 };
 

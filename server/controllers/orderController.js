@@ -1,6 +1,7 @@
 const Order = require('../models/Order');
 const Dish = require('../models/Dish');
 const Notification = require('../models/Notification');
+const { calculateHaversineDistance } = require('./dishController');
 
 const createOrder = async (req, res, next) => {
   try {
@@ -48,6 +49,14 @@ const createOrder = async (req, res, next) => {
       type: 'ORDER'
     });
 
+    // Tell the seller a new order just landed in their kitchen.
+    await Notification.create({
+      recipient: sellerId,
+      title: 'New meal order',
+      message: `New order from ${req.user.name} for ${resolvedItems.length} item${resolvedItems.length > 1 ? 's' : ''}.`,
+      type: 'ORDER'
+    });
+
     res.status(201).json({ success: true, message: 'Order created successfully', data: order });
   } catch (error) {
     next(error);
@@ -73,7 +82,31 @@ const getSellerOrders = async (req, res, next) => {
       .populate('customerId', 'name location')
       .populate('sellerId', 'name location')
       .sort({ createdAt: -1 });
-    res.status(200).json({ success: true, message: 'Orders fetched successfully', data: orders });
+
+    const chefLat = Number(req.user.location?.latitude ?? req.user.latitude ?? 0);
+    const chefLon = Number(req.user.location?.longitude ?? req.user.longitude ?? 0);
+
+    // Attach a backend-computed delivery distance and strip the customer's
+    // exact coordinates from the payload before it reaches the chef UI.
+    const data = orders.map((order) => {
+      const plain = order.toObject();
+      const customer = plain.customerId;
+      let distanceKm = null;
+
+      if (customer?.location) {
+        const cLat = Number(customer.location.latitude) || 0;
+        const cLon = Number(customer.location.longitude) || 0;
+        if (cLat && cLon && (chefLat || chefLon)) {
+          distanceKm = calculateHaversineDistance(chefLat, chefLon, cLat, cLon);
+        }
+        customer.location = { address: customer.location.address || '' };
+      }
+
+      plain.distanceKm = distanceKm;
+      return plain;
+    });
+
+    res.status(200).json({ success: true, message: 'Orders fetched successfully', data });
   } catch (error) {
     next(error);
   }
@@ -88,10 +121,29 @@ const updateOrderStatus = async (req, res, next) => {
     }
 
     const { status } = req.body;
-    const allowedStatuses = ['PENDING', 'ACCEPTED', 'PAYMENT_PENDING', 'PAID', 'READY', 'COMPLETED', 'REJECTED', 'CANCELLED'];
+    const allowedStatuses = ['PENDING', 'ACCEPTED', 'PREPARING', 'PAYMENT_PENDING', 'PAID', 'READY', 'COMPLETED', 'REJECTED', 'CANCELLED'];
     if (status && allowedStatuses.includes(status)) {
       order.status = status;
       await order.save();
+
+      // Keep the customer in the loop on the meaningful transitions.
+      const notifyCustomerStatuses = ['ACCEPTED', 'PREPARING', 'READY', 'COMPLETED', 'REJECTED', 'CANCELLED'];
+      if (notifyCustomerStatuses.includes(status)) {
+        const label = {
+          ACCEPTED: 'accepted',
+          PREPARING: 'being prepared',
+          READY: 'ready',
+          COMPLETED: 'completed',
+          REJECTED: 'rejected',
+          CANCELLED: 'cancelled'
+        }[status];
+        await Notification.create({
+          recipient: order.customerId,
+          title: 'Order status update',
+          message: `Your order of ${order.items.length} item${order.items.length > 1 ? 's' : ''} is now ${label}.`,
+          type: 'ORDER'
+        });
+      }
     }
 
     res.status(200).json({ success: true, message: 'Order updated successfully', data: order });

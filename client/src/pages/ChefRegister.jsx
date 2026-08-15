@@ -43,7 +43,7 @@ const ChefRegister = () => {
         location: ''
       });
 
-      navigate('/chef/login', {
+      navigate('/login', {
         state: { message: 'Chef account created successfully. Please log in.' }
       });
     } catch (err) {
@@ -176,7 +176,7 @@ const ChefRegister = () => {
 
         <p className="text-xs text-slate-500 pt-2 border-t border-slate-100">
           Already have a chef account?{' '}
-          <Link to="/chef/login" className="font-bold text-[#4B254B] hover:underline">
+          <Link to="/login" className="font-bold text-[#4B254B] hover:underline">
             Log in here
           </Link>
         </p>

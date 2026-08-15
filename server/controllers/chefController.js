@@ -1,7 +1,7 @@
 const User = require('../models/User');
 const Dish = require('../models/Dish');
 const Review = require('../models/Review');
-const { calculateHaversineDistance, isWithinBoundingBox } = require('./dishController');
+const { calculateHaversineDistance, isWithinBoundingBox, calculateBayesianRating } = require('./dishController');
 
 // Everything a customer needs to see on a chef profile. Password is never
 // selected anywhere — this projection simply avoids extra document weight.
@@ -62,6 +62,12 @@ const getChefs = async (req, res, next) => {
         const id = c._id.toString();
         const rating = ratingMap[id] || { averageRating: 0, reviewCount: 0 };
 
+        // Keep location as a plain display string so customers' React views
+        // never receive the internal { address, latitude, longitude } object.
+        if (c.location && typeof c.location === 'object') {
+          c.location = c.location.address || '';
+        }
+
         let distance = null;
         if (isWithinBoundingBox(userLat, userLon, Number(c.latitude) || userLat, Number(c.longitude) || userLon)) {
           distance = calculateHaversineDistance(userLat, userLon, Number(c.latitude) || userLat, Number(c.longitude) || userLon);
@@ -96,9 +102,16 @@ const getChefs = async (req, res, next) => {
  */
 const getChefById = async (req, res, next) => {
   try {
-    const chef = await User.findById(req.params.id).select(CHEF_PROFILE_FIELDS);
-    if (!chef) {
+    const chefDoc = await User.findById(req.params.id).select(CHEF_PROFILE_FIELDS);
+    if (!chefDoc) {
       return res.status(404).json({ success: false, message: 'Chef not found.' });
+    }
+
+    // The stored location is an object { address, latitude, longitude }, but
+    // public profiles only need a display string.
+    const chef = chefDoc.toObject();
+    if (chef.location && typeof chef.location === 'object') {
+      chef.location = chef.location.address || '';
     }
 
     const [dishes, reviews] = await Promise.all([
@@ -141,8 +154,9 @@ const getChefById = async (req, res, next) => {
  */
 const updateMyProfile = async (req, res, next) => {
   try {
-    const { tagline, bio, specialties, yearsOfExperience, coverImage, profileImage, location } = req.body;
+    const { name, tagline, bio, specialties, yearsOfExperience, coverImage, profileImage, location } = req.body;
 
+    if (name !== undefined && String(name).trim()) req.user.name = String(name).trim();
     if (tagline !== undefined) req.user.tagline = String(tagline);
     if (bio !== undefined) req.user.bio = String(bio);
     if (coverImage !== undefined) req.user.coverImage = String(coverImage);
@@ -221,11 +235,53 @@ const removePortfolioItem = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /api/chefs/me/reviews — the logged-in HomeChef's own reviews.
+ * Returns the review list plus a 1–5 breakdown and a Bayesian-smoothed
+ * rating so a handful of 5-star reviews cannot inflate the ranking.
+ */
+const getMyReviews = async (req, res, next) => {
+  try {
+    const reviews = await Review.find({ sellerId: req.user._id })
+      .populate('customerId', 'name profileImage')
+      .populate('dishId', 'name image')
+      .sort({ createdAt: -1 });
+
+    const breakdown = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let sum = 0;
+    reviews.forEach((review) => {
+      if (review.rating >= 1 && review.rating <= 5) breakdown[review.rating] += 1;
+      sum += review.rating;
+    });
+
+    const reviewCount = reviews.length;
+    const averageRating = reviewCount ? Number((sum / reviewCount).toFixed(1)) : 0;
+    const bayesianRating = reviewCount
+      ? Number(calculateBayesianRating(averageRating, reviewCount).toFixed(2))
+      : 0;
+
+    res.status(200).json({
+      success: true,
+      message: 'Reviews fetched successfully',
+      data: {
+        reviews,
+        ratingBreakdown: breakdown,
+        averageRating,
+        bayesianRating,
+        reviewCount
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getChefs,
   getChefById,
   updateMyProfile,
   addPortfolioItem,
   removePortfolioItem,
+  getMyReviews,
   buildRatingMap
 };

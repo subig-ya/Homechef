@@ -1,11 +1,10 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import ChefLogin from './pages/ChefLogin';
 import ChefRegister from './pages/ChefRegister';
 import ChefProfilePage from './pages/ChefProfilePage';
 import BecomeChefPage from './pages/BecomeChefPage';
@@ -18,13 +17,18 @@ import BookingsPage from './pages/BookingsPage';
 import OrdersPage from './pages/OrdersPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import DashboardPage from './pages/DashboardPage';
+import ChefDashboardPage from './pages/ChefDashboardPage';
 
 function AppRoutes() {
   const location = useLocation();
 
   // The unified dashboard owns its own navigation, so the global
   // Navbar/Footer are hidden there.
-  const hideChrome = location.pathname.startsWith('/dashboard');
+  const hideChrome =
+    location.pathname.startsWith('/dashboard') ||
+    location.pathname.startsWith('/chef/dashboard') ||
+    location.pathname === '/login' ||
+    location.pathname === '/register';
 
   return (
     <>
@@ -34,7 +38,7 @@ function AppRoutes() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/chef/login" element={<ChefLogin />} />
+        <Route path="/chef/login" element={<Navigate to="/login" replace />} />
         <Route path="/chef/register" element={<ChefRegister />} />
         <Route path="/chefs" element={<ChefsDirectoryPage />} />
         <Route path="/chefs/:id" element={<ChefPublicProfilePage />} />
@@ -47,6 +51,7 @@ function AppRoutes() {
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/chef/dashboard" element={<ChefDashboardPage />} />
 
         {/* Catch-all route */}
         <Route path="*" element={<Home />} />

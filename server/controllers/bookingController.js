@@ -120,9 +120,34 @@ const getMyBookings = async (req, res, next) => {
 const getSellerBookings = async (req, res, next) => {
   try {
     const bookings = await Booking.find({ sellerId: req.user._id })
-      .populate('customerId', 'name')
+      .populate('customerId', 'name profileImage location')
       .sort({ createdAt: -1 });
-    res.status(200).json({ success: true, message: 'Bookings fetched successfully', data: bookings });
+
+    const chefLat = Number(req.user.location?.latitude ?? req.user.latitude ?? 0);
+    const chefLon = Number(req.user.location?.longitude ?? req.user.longitude ?? 0);
+
+    // Backend-computed travel distance; the customer's exact coordinates are
+    // stripped from the payload so the chef UI never sees raw lat/lon.
+    const data = bookings.map((booking) => {
+      const plain = booking.toObject();
+      const customer = plain.customerId;
+      let distanceKm = null;
+
+      if (customer?.location) {
+        const cLat = Number(customer.location.latitude) || 0;
+        const cLon = Number(customer.location.longitude) || 0;
+        if (cLat && cLon && (chefLat || chefLon)) {
+          distanceKm = calculateHaversineDistance(chefLat, chefLon, cLat, cLon);
+        }
+        customer.location = { address: customer.location.address || '' };
+      }
+
+      // Fall back to the distance captured at booking creation time.
+      plain.distanceKm = distanceKm ?? (plain.calculatedDistance || null);
+      return plain;
+    });
+
+    res.status(200).json({ success: true, message: 'Bookings fetched successfully', data });
   } catch (error) {
     next(error);
   }
@@ -136,6 +161,14 @@ const acceptBooking = async (req, res, next) => {
     booking.status = 'ACCEPTED';
     booking.paymentStatus = 'PENDING';
     await booking.save();
+
+    await Notification.create({
+      recipient: booking.customerId,
+      bookingId: booking._id,
+      title: 'Booking accepted',
+      message: `${req.user.name} accepted your booking for ${booking.date} (${booking.slotType.toLowerCase()}).`,
+      type: 'BOOKING'
+    });
 
     res.status(200).json({ success: true, message: 'Booking accepted', data: booking });
   } catch (error) {
@@ -151,10 +184,41 @@ const rejectBooking = async (req, res, next) => {
     booking.status = 'REJECTED';
     await booking.save();
 
+    await Notification.create({
+      recipient: booking.customerId,
+      bookingId: booking._id,
+      title: 'Booking declined',
+      message: `${req.user.name} could not take your booking for ${booking.date}.`,
+      type: 'BOOKING'
+    });
+
     res.status(200).json({ success: true, message: 'Booking rejected', data: booking });
   } catch (error) {
     next(error);
   }
 };
 
-module.exports = { createBooking, getMyBookings, getSellerBookings, acceptBooking, rejectBooking };
+const completeBooking = async (req, res, next) => {
+  try {
+    const booking = await Booking.findOne({ _id: req.params.id, sellerId: req.user._id });
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found.' });
+
+    booking.status = 'COMPLETED';
+    booking.paymentStatus = 'PAID';
+    await booking.save();
+
+    await Notification.create({
+      recipient: booking.customerId,
+      bookingId: booking._id,
+      title: 'Booking completed',
+      message: `Your booking with ${req.user.name} for ${booking.date} is complete.`,
+      type: 'BOOKING'
+    });
+
+    res.status(200).json({ success: true, message: 'Booking completed', data: booking });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { createBooking, getMyBookings, getSellerBookings, acceptBooking, rejectBooking, completeBooking };
